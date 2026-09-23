@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --font-plex-sans: "IBM Plex Sans";
+  --font-plex-mono: "IBM Plex Mono";
+}
+
+body {
+  background-color: theme("colors.surface");
+  color: theme("colors.ink");
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Angka pada tabel disejajarkan agar mudah dibandingkan antar baris. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+*:focus-visible {
+  outline: 2px solid theme("colors.part");
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
