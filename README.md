@@ -1,84 +1,70 @@
 # Dashboard Rekap Pembelian — Bosowa Berlian Motor KIMA
 
-Dashboard web untuk membaca rekap pembelian suku cadang pada dua departemen,
-**Sparepart** dan **Service**, periode Januari sampai Agustus 2026.
+Dashboard web untuk rekap pembelian suku cadang departemen **Sparepart** dan
+**Service**, dilengkapi halaman **Admin** untuk mengubah data langsung di tabel,
+mengimpor dari Excel, dan mengekspor ke Excel.
 
-Data berasal dari rekap nota Toko Intan Motor yang sudah dibersihkan dari
-pencatatan ganda. Satu baris mewakili satu barang pada satu harga satuan.
+## Fitur
 
-## Isi dashboard
+| Halaman | Isi | Perlu masuk |
+|---|---|---|
+| `/` | Ringkasan dan barang tersering kedua departemen | Tidak |
+| `/sparepart`, `/service` | Ringkasan, lima barang teratas, daftar lengkap dengan pencarian dan pengurutan | Tidak |
+| `/admin/sparepart`, `/admin/service` | Ubah setiap sel, tambah dan hapus baris, impor Excel, ekspor Excel | Ya |
 
-| Halaman | Isi |
-|---|---|
-| `/` | Kartu ringkasan dan delapan barang paling sering dibeli untuk kedua departemen |
-| `/sparepart` | Ringkasan, lima barang teratas, dan daftar lengkap 688 baris |
-| `/service` | Ringkasan, lima barang teratas, dan daftar lengkap 525 baris |
-
-Daftar lengkap dilengkapi pencarian nama barang atau nomor part, pengurutan
-setiap kolom, dan paginasi 25 baris per halaman.
+Frekuensi total dan urutan barang dihitung ulang otomatis oleh basis data setiap
+kali data berubah. Impor berjalan dalam satu transaksi, sehingga impor yang
+gagal tidak meninggalkan data setengah jadi.
 
 ## Teknologi
 
-- **Next.js 14** (App Router) dan **React 18** — kerangka aplikasi
-- **Tailwind CSS** — penataan tampilan
-- **Supabase** — basis data PostgreSQL dan API baca
-- **Vercel** — hosting
+Next.js 14 (App Router), React 18, Tailwind CSS, Supabase (PostgreSQL), ExcelJS,
+dan Vercel. Seluruhnya dapat dipakai pada paket gratis.
 
-Seluruhnya dapat dipakai pada paket gratis masing-masing layanan.
+Semua akses ke Supabase dilakukan di server memakai secret key. Peramban
+pengunjung tidak pernah menerima kunci apa pun, dan tabel dikunci dari akses
+publik langsung.
 
 ## Menjalankan di komputer sendiri
 
 ```bash
 npm install
-cp .env.example .env.local   # lalu isi nilainya
+cp .env.example .env.local   # lalu isi ketiga nilainya
 npm run dev
 ```
 
-Buka http://localhost:3000.
+| Variabel | Isi |
+|---|---|
+| `SUPABASE_URL` | Project URL, misalnya `https://abcd.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret key (`sb_secret_…`) atau service_role key |
+| `ADMIN_PASSWORD` | Kata sandi halaman Admin, minimal 12 karakter |
 
-Dua environment variable yang wajib diisi:
-
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-```
-
-Bila keduanya belum diisi, dashboard tetap terbuka dan menampilkan petunjuk
-pengisian, bukan halaman error.
+Sebelum dijalankan pertama kali, jalankan seluruh isi `supabase/01_schema.sql`
+pada Supabase SQL Editor.
 
 ## Struktur berkas
 
 ```
-app/                     halaman dashboard
-  page.tsx               ringkasan kedua departemen
-  sparepart/page.tsx     halaman departemen sparepart
-  service/page.tsx       halaman departemen service
-components/              komponen tampilan
+app/
+  page.tsx, sparepart/, service/   halaman publik
+  admin/                           halaman masuk dan kelola data
+  api/admin/                       API tambah, ubah, hapus, impor, ekspor, masuk, keluar
+components/
+  admin/                           tabel yang dapat diubah dan panel impor
 lib/
-  supabase.ts            koneksi ke Supabase
-  data.ts                kueri dan tipe data
-  format.ts              format rupiah dan angka
+  supabase.ts   klien Supabase sisi server
+  data.ts       kueri baca
+  barang.ts     aturan validasi dan kunci barang
+  excel.ts      baca dan tulis berkas Excel
+  auth.ts       sesi admin
+middleware.ts   melindungi /admin dan /api/admin
 supabase/
-  01_schema.sql          tabel, view, indeks, dan aturan akses
-  02_seed_sparepart.sql  688 baris data sparepart
-  03_seed_service.sql    525 baris data service
-tools/
-  generate_seed.py       membuat ulang berkas seed dari Excel
-TUTORIAL.md              panduan lengkap dari nol sampai online
+  01_schema.sql           tabel, fungsi, dan hak akses (aman dijalankan ulang)
+  02_seed_sparepart.sql   data awal opsional
+  03_seed_service.sql     data awal opsional
+tools/generate_seed.py    cadangan: membuat berkas seed dari Excel
+TUTORIAL.md               panduan lengkap dari nol sampai online
 ```
 
-## Memperbarui data periode berikutnya
-
-```bash
-python tools/generate_seed.py rekap_sparepart.xlsx "ANALISIS MALLOMO" sparepart
-python tools/generate_seed.py rekap_service.xlsx "ANALISIS JAN-AGU 2026" service
-```
-
-Jalankan isi berkas SQL yang dihasilkan pada Supabase SQL Editor. Perintah
-`delete` di awal berkas memastikan data lama departemen tersebut diganti, bukan
-ditumpuk.
-
-## Panduan lengkap
-
-Langkah pembuatan akun GitHub, Supabase, dan Vercel sampai dashboard dapat
-diakses publik ada di [TUTORIAL.md](TUTORIAL.md).
+Panduan langkah demi langkah, termasuk cara memperbarui dari versi 1, ada di
+[TUTORIAL.md](TUTORIAL.md).

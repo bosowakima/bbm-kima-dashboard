@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DEPARTEMEN } from "@/lib/data";
+import { DEPARTEMEN } from "@/lib/departemen";
 
 export default function SiteHeader() {
   return (
@@ -31,6 +31,12 @@ export default function SiteHeader() {
               </Link>
             )
           )}
+          <Link
+            href="/admin"
+            className="ml-1 rounded-md border border-line px-3 py-2 text-slate hover:bg-surface hover:text-ink"
+          >
+            Admin
+          </Link>
         </nav>
       </div>
     </header>

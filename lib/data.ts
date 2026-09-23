@@ -1,26 +1,11 @@
+import "server-only";
+import { revalidatePath } from "next/cache";
 import { getSupabase } from "./supabase";
+import { DAFTAR_DEPARTEMEN, pesanGalatDb, type Departemen } from "./barang";
+import { DEPARTEMEN } from "./departemen";
 
-export type Departemen = "sparepart" | "service";
-
-export const DEPARTEMEN: Record<
-  Departemen,
-  { nama: string; jalur: string; ringkas: string; sumber: string }
-> = {
-  sparepart: {
-    nama: "Sparepart",
-    jalur: "/sparepart",
-    ringkas: "Pembelian sparepart dari Mallomo",
-    sumber:
-      "Diambil dari nota bertanda biru pada rekap sparepart, periode Januari sampai Agustus 2026.",
-  },
-  service: {
-    nama: "Service",
-    jalur: "/service",
-    ringkas: "Pembelian kebutuhan service",
-    sumber:
-      "Diambil dari seluruh nota pada rekap service, periode Januari sampai Agustus 2026.",
-  },
-};
+export { DEPARTEMEN };
+export type { Departemen };
 
 export type Ringkasan = {
   departemen: Departemen;
@@ -57,29 +42,82 @@ export type HasilTabel = {
   jumlah: number;
 };
 
-export async function ambilRingkasan(): Promise<Ringkasan[]> {
+/**
+ * Membaca seluruh baris satu departemen langsung dari tabel rekap_barang.
+ * Ringkasan dan daftar barang teratas dihitung di sini, sehingga dashboard
+ * hanya membutuhkan izin baca pada satu tabel dan tidak bergantung pada view.
+ * Data diambil per 1.000 baris karena itulah batas bawaan Supabase per permintaan.
+ */
+async function ambilBarisDepartemen(departemen: Departemen): Promise<BarisRekap[]> {
   const db = getSupabase();
   if (!db) return [];
-  const { data, error } = await db.from("ringkasan_departemen").select("*");
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Ringkasan[];
+
+  const UKURAN = 1000;
+  const semua: BarisRekap[] = [];
+  for (let dari = 0; ; dari += UKURAN) {
+    const { data, error } = await db
+      .from("rekap_barang")
+      .select("*")
+      .eq("departemen", departemen)
+      .order("id", { ascending: true })
+      .range(dari, dari + UKURAN - 1);
+    if (error) throw new Error(pesanGalatDb(error));
+    const potongan = (data ?? []) as BarisRekap[];
+    semua.push(...potongan);
+    if (potongan.length < UKURAN) break;
+  }
+  return semua;
+}
+
+function hitungRingkasan(departemen: Departemen, baris: BarisRekap[]): Ringkasan {
+  return {
+    departemen,
+    jumlah_baris: baris.length,
+    jumlah_barang: new Set(baris.map((b) => `${b.no_part}|${b.nama_barang}`)).size,
+    jumlah_pembelian: baris.reduce((total, b) => total + b.frekuensi, 0),
+    estimasi_nilai: baris.reduce((total, b) => total + b.harga_satuan * b.frekuensi, 0),
+  };
+}
+
+export async function ambilRingkasan(): Promise<Ringkasan[]> {
+  const daftar = [...DAFTAR_DEPARTEMEN];
+  const hasil = await Promise.all(daftar.map((d) => ambilBarisDepartemen(d)));
+  return daftar.map((d, i) => hitungRingkasan(d, hasil[i]));
 }
 
 export async function ambilBarangTeratas(
   departemen: Departemen,
   batas = 10
 ): Promise<BarangRingkas[]> {
-  const db = getSupabase();
-  if (!db) return [];
-  const { data, error } = await db
-    .from("barang_ringkas")
-    .select("*")
-    .eq("departemen", departemen)
-    .order("frekuensi_total", { ascending: false })
-    .order("estimasi_nilai", { ascending: false })
-    .limit(batas);
-  if (error) throw new Error(error.message);
-  return (data ?? []) as BarangRingkas[];
+  const baris = await ambilBarisDepartemen(departemen);
+
+  const perBarang = new Map<string, BarangRingkas>();
+  for (const b of baris) {
+    const kunci = `${b.no_part}|${b.nama_barang}`;
+    const kini = perBarang.get(kunci) ?? {
+      departemen,
+      no_part: b.no_part,
+      nama_barang: b.nama_barang,
+      frekuensi_total: 0,
+      varian_harga: 0,
+      harga_min: b.harga_satuan,
+      harga_max: b.harga_satuan,
+      estimasi_nilai: 0,
+    };
+    kini.frekuensi_total += b.frekuensi;
+    kini.varian_harga += 1;
+    kini.harga_min = Math.min(kini.harga_min, b.harga_satuan);
+    kini.harga_max = Math.max(kini.harga_max, b.harga_satuan);
+    kini.estimasi_nilai += b.harga_satuan * b.frekuensi;
+    perBarang.set(kunci, kini);
+  }
+
+  return Array.from(perBarang.values())
+    .sort(
+      (a, b) =>
+        b.frekuensi_total - a.frekuensi_total || b.estimasi_nilai - a.estimasi_nilai
+    )
+    .slice(0, batas);
 }
 
 export type OpsiTabel = {
@@ -114,7 +152,8 @@ export async function ambilTabel(opsi: OpsiTabel): Promise<HasilTabel> {
     .select("*", { count: "exact" })
     .eq("departemen", opsi.departemen);
 
-  const cari = opsi.cari?.trim();
+  // Tanda baca yang punya arti khusus pada filter Supabase dibuang dari kata kunci.
+  const cari = opsi.cari?.replace(/[,()*%\\:"]/g, " ").trim();
   if (cari) {
     const pola = `%${cari}%`;
     kueri = kueri.or(`nama_barang.ilike.${pola},no_part.ilike.${pola}`);
@@ -126,6 +165,24 @@ export async function ambilTabel(opsi: OpsiTabel): Promise<HasilTabel> {
     .order("id", { ascending: true })
     .range(dari, dari + perHalaman - 1);
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(pesanGalatDb(error));
   return { baris: (data ?? []) as BarisRekap[], jumlah: count ?? 0 };
+}
+
+/** Seluruh baris satu departemen, diurutkan seperti di Excel. Dipakai untuk ekspor. */
+export async function ambilSemuaBaris(departemen: Departemen): Promise<BarisRekap[]> {
+  const baris = await ambilBarisDepartemen(departemen);
+  return [...baris].sort((a, b) => a.no_urut - b.no_urut || a.id - b.id);
+}
+
+/** Memperbarui frekuensi total dan nomor urut, lalu menyegarkan halaman publik. */
+export async function rapikanDanSegarkan(departemen: Departemen): Promise<void> {
+  const db = getSupabase();
+  if (db) {
+    const { error } = await db.rpc("rapikan_departemen", { p_departemen: departemen });
+    if (error) throw error;
+  }
+  revalidatePath("/");
+  revalidatePath(DEPARTEMEN[departemen].jalur);
+  revalidatePath(`/admin/${departemen}`);
 }

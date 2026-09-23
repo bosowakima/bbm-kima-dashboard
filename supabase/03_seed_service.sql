@@ -1,3 +1,4 @@
+-- (Opsional) Data awal. Cara yang lebih mudah: impor berkas Excel lewat halaman Admin.
 -- Data service: 525 baris, dibuat ulang dari REKAP_INTAN_SVC_2026_new.xlsx.
 delete from public.rekap_barang where departemen = 'service';
 insert into public.rekap_barang (departemen, no_urut, no_part, nama_barang, harga_satuan, frekuensi, frekuensi_total) values
@@ -526,3 +527,5 @@ insert into public.rekap_barang (departemen, no_urut, no_part, nama_barang, harg
   ('service', 523, 'ME993513', 'WATER PUNP', 4676000, 1, 1),
   ('service', 524, '-', 'WIPER', 102000, 1, 1),
   ('service', 525, 'MB141141', 'WIPER', 180000, 1, 1);
+
+select public.rapikan_departemen('service');

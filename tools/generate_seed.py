@@ -5,8 +5,8 @@ Cara pakai:
     python tools/generate_seed.py rekap_sparepart.xlsx "ANALISIS MALLOMO" sparepart
     python tools/generate_seed.py rekap_service.xlsx "ANALISIS JAN-AGU 2026" service
 
-Hasilnya ditulis ke folder supabase/. Jalankan isinya di Supabase SQL Editor
-untuk mengganti data periode lama dengan data periode baru.
+Hasilnya ditulis ke folder supabase/. Cara yang lebih mudah untuk memperbarui data
+adalah fitur Impor pada halaman Admin dashboard; skrip ini disediakan sebagai cadangan.
 
 Prasyarat: pip install openpyxl
 """
@@ -84,6 +84,8 @@ def main() -> int:
             f"delete from public.rekap_barang where departemen = '{departemen}';",
             "insert into public.rekap_barang (departemen, no_urut, no_part, nama_barang, harga_satuan, frekuensi, frekuensi_total) values",
             ",\n".join(nilai) + ";",
+            "",
+            f"select public.rapikan_departemen('{departemen}');",
             "",
         ]
     )

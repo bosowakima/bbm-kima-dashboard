@@ -1,3 +1,4 @@
+-- (Opsional) Data awal. Cara yang lebih mudah: impor berkas Excel lewat halaman Admin.
 -- Data sparepart: 688 baris, hasil rekap Januari sampai Agustus 2026.
 delete from public.rekap_barang where departemen = 'sparepart';
 insert into public.rekap_barang (departemen, no_urut, no_part, nama_barang, harga_satuan, frekuensi, frekuensi_total) values
@@ -689,3 +690,5 @@ insert into public.rekap_barang (departemen, no_urut, no_part, nama_barang, harg
   ('sparepart', 686, 'ME995289', 'WATER PUMP', 6093000, 1, 1),
   ('sparepart', 687, 'ME091412', 'WATER SEPARATOR', 3326000, 1, 1),
   ('sparepart', 688, '-', 'WHEEL DIS 800-20', 1800000, 1, 1);
+
+select public.rapikan_departemen('sparepart');

@@ -1,10 +1,14 @@
-# Modul Tutorial: Membangun Dashboard Rekap Pembelian BBM KIMA
+# Modul Tutorial: Dashboard Rekap Pembelian BBM KIMA (versi 2)
 
 Panduan ini membawa Anda dari keadaan belum memiliki akun apa pun sampai
-dashboard dapat dibuka siapa saja melalui tautan publik. Seluruh layanan yang
-dipakai memiliki paket gratis dan tidak meminta kartu kredit.
+dashboard dapat dibuka publik, lengkap dengan halaman Admin untuk mengubah data,
+mengimpor, dan mengekspor Excel. Seluruh layanan yang dipakai memiliki paket
+gratis dan tidak meminta kartu kredit.
 
 Perkiraan waktu pengerjaan pertama kali: 45 sampai 60 menit.
+
+> **Sudah memasang versi 1?** Langsung ke
+> [bagian 13, Memperbarui dari versi 1](#13-memperbarui-dari-versi-1).
 
 ---
 
@@ -15,19 +19,18 @@ Perkiraan waktu pengerjaan pertama kali: 45 sampai 60 menit.
 3. [Membuat akun GitHub](#3-membuat-akun-github)
 4. [Mengunggah proyek ke GitHub](#4-mengunggah-proyek-ke-github)
 5. [Membuat akun dan proyek Supabase](#5-membuat-akun-dan-proyek-supabase)
-6. [Membuat tabel dan mengisi data](#6-membuat-tabel-dan-mengisi-data)
+6. [Menyiapkan basis data](#6-menyiapkan-basis-data)
 7. [Mengambil kunci koneksi Supabase](#7-mengambil-kunci-koneksi-supabase)
 8. [Menjalankan dashboard di komputer sendiri](#8-menjalankan-dashboard-di-komputer-sendiri)
-9. [Membuat akun Vercel dan menerbitkan dashboard](#9-membuat-akun-vercel-dan-menerbitkan-dashboard)
-10. [Memperbarui data periode berikutnya](#10-memperbarui-data-periode-berikutnya)
+9. [Menerbitkan dashboard di Vercel](#9-menerbitkan-dashboard-di-vercel)
+10. [Memakai halaman Admin](#10-memakai-halaman-admin)
 11. [Pemecahan masalah](#11-pemecahan-masalah)
 12. [Catatan keamanan dan batas paket gratis](#12-catatan-keamanan-dan-batas-paket-gratis)
+13. [Memperbarui dari versi 1](#13-memperbarui-dari-versi-1)
 
 ---
 
 ## 1. Gambaran sistem
-
-Tiga layanan bekerja bersama:
 
 | Layanan | Peran | Biaya |
 |---|---|---|
@@ -35,61 +38,56 @@ Tiga layanan bekerja bersama:
 | **Supabase** | Basis data PostgreSQL tempat data rekap disimpan | Gratis |
 | **Vercel** | Menjalankan dashboard dan menyediakan alamat publik | Gratis |
 
-Alur kerjanya: kode disimpan di GitHub, Vercel membaca kode itu dan
-menjalankannya sebagai situs web, lalu situs tersebut mengambil data dari
-Supabase setiap kali halaman dibuka.
-
 ```
-Excel rekap  ──(sekali, lewat SQL)──▶  Supabase
-                                          │
-                                          │ dibaca saat halaman dibuka
-                                          ▼
-   GitHub  ──(otomatis saat ada perubahan)──▶  Vercel  ──▶  pengunjung
+                     ┌──────────────── Vercel ────────────────┐
+ pengunjung ───────▶ │  halaman publik  (hanya membaca)       │
+                     │                                        │ ──secret key──▶ Supabase
+ admin  ─(sandi)───▶ │  halaman Admin   (ubah, impor, ekspor) │
+                     └────────────────────────────────────────┘
+          GitHub ──(otomatis setiap ada perubahan kode)──▶ Vercel
 ```
 
-Data rekap tidak disimpan di dalam kode. Kode hanya berisi tampilan dan cara
-membaca data. Karena itu, memperbarui data cukup dilakukan di Supabase tanpa
-menyentuh kode.
+Hal penting pada versi ini: **peramban pengunjung tidak pernah berhubungan
+langsung dengan Supabase.** Semua pembacaan dan penulisan data dilakukan oleh
+server di Vercel memakai *secret key*. Kunci tersebut hanya tersimpan di server,
+sehingga tabel di Supabase dapat dikunci rapat dari akses publik.
+
+Halaman yang tersedia:
+
+| Alamat | Isi | Perlu masuk |
+|---|---|---|
+| `/` | Ringkasan kedua departemen | Tidak |
+| `/sparepart`, `/service` | Ringkasan, barang teratas, daftar lengkap | Tidak |
+| `/admin/sparepart`, `/admin/service` | Ubah data, tambah, hapus, impor, ekspor | Ya |
+
+Setelah basis data disiapkan satu kali, seluruh pengelolaan data dilakukan dari
+halaman Admin. Anda tidak perlu membuka Supabase lagi.
 
 ---
 
 ## 2. Menyiapkan perangkat
 
-Bagian ini hanya diperlukan bila Anda ingin menjalankan dan mengubah dashboard
-di komputer sendiri. Bila Anda hanya ingin menerbitkannya, Anda dapat langsung
-ke [bagian 3](#3-membuat-akun-github) dan mengunggah berkas lewat halaman web
-GitHub.
+Bagian ini hanya diperlukan bila Anda ingin menjalankan dashboard di komputer
+sendiri. Bila hanya ingin menerbitkannya, lanjut ke bagian 3 dan unggah berkas
+lewat halaman web GitHub.
 
 ### 2.1 Memasang Node.js
 
-Node.js adalah program yang menjalankan kode dashboard di komputer Anda.
-
-1. Buka <https://nodejs.org>.
-2. Unduh versi yang bertanda **LTS**. Versi 18 atau yang lebih baru sudah cukup.
-3. Jalankan pemasangnya, tekan Next sampai selesai dengan pengaturan bawaan.
-4. Buka Command Prompt pada Windows, atau Terminal pada macOS, lalu ketik:
+1. Buka <https://nodejs.org>, unduh versi **LTS**. Diperlukan versi **20 atau
+   lebih baru**.
+2. Jalankan pemasangnya dengan pengaturan bawaan.
+3. Buka Command Prompt (Windows) atau Terminal (macOS), lalu periksa:
 
    ```bash
    node -v
    npm -v
    ```
 
-   Bila keduanya menampilkan nomor versi, pemasangan berhasil.
-
 ### 2.2 Memasang Git
-
-Git adalah program yang mengirim kode ke GitHub.
 
 1. Buka <https://git-scm.com/downloads>, unduh sesuai sistem operasi Anda.
 2. Jalankan pemasangnya dengan pengaturan bawaan.
-3. Periksa hasilnya:
-
-   ```bash
-   git --version
-   ```
-
-4. Perkenalkan identitas Anda kepada Git, karena setiap perubahan dicatat atas
-   nama ini:
+3. Perkenalkan identitas Anda kepada Git:
 
    ```bash
    git config --global user.name "Nama Anda"
@@ -98,56 +96,30 @@ Git adalah program yang mengirim kode ke GitHub.
 
 ### 2.3 Menyiapkan berkas proyek
 
-Ekstrak berkas ZIP yang Anda terima. Isinya adalah satu folder bernama
-`bbm-kima-dashboard`. Letakkan di tempat yang mudah dicari, misalnya
-`D:\proyek\bbm-kima-dashboard` atau `~/proyek/bbm-kima-dashboard`.
+Ekstrak berkas ZIP. Isinya satu folder bernama `bbm-kima-dashboard`. Letakkan di
+tempat yang mudah dicari, misalnya `D:\proyek\bbm-kima-dashboard`.
 
 ---
 
 ## 3. Membuat akun GitHub
 
-1. Buka <https://github.com/signup>.
-2. Masukkan alamat email, kata sandi, dan nama pengguna. Nama pengguna akan
-   muncul pada alamat repositori, jadi pilih yang rapi, misalnya `ahnafzaki`.
-3. Selesaikan verifikasi, lalu buka email Anda dan klik tautan konfirmasi.
-4. Saat ditanya paket, pilih **Free**.
-
-Setelah masuk, Anda berada di halaman beranda GitHub.
-
-### 3.1 Membuat repositori kosong
-
-1. Klik tanda **+** di kanan atas, lalu pilih **New repository**.
-2. Isi **Repository name** dengan `bbm-kima-dashboard`.
-3. Isi **Description** dengan keterangan singkat, misalnya
-   `Dashboard rekap pembelian sparepart dan service BBM KIMA`.
-4. Pilih **Public** agar Vercel dapat membacanya tanpa pengaturan tambahan.
-   Pilih **Private** bila data dianggap rahasia; Vercel tetap dapat membaca
-   repositori privat milik akun Anda sendiri.
-5. **Jangan** mencentang *Add a README file*, *Add .gitignore*, maupun
-   *Choose a license*. Berkas-berkas itu sudah ada di dalam proyek.
-6. Klik **Create repository**.
-
-Halaman berikutnya menampilkan alamat repositori, misalnya
-`https://github.com/ahnafzaki/bbm-kima-dashboard.git`. Simpan alamat ini.
+1. Buka <https://github.com/signup>, isi email, kata sandi, dan nama pengguna.
+2. Selesaikan verifikasi dan konfirmasi email. Pilih paket **Free**.
+3. Klik tanda **+** di kanan atas, pilih **New repository**.
+4. Isi **Repository name** dengan `bbm-kima-dashboard`.
+5. Pilih **Private** bila kode tidak ingin dilihat orang lain. Vercel tetap
+   dapat membaca repositori privat milik akun Anda.
+6. **Jangan** mencentang *Add a README file*, *Add .gitignore*, maupun
+   *Choose a license*. Klik **Create repository**.
 
 ---
 
 ## 4. Mengunggah proyek ke GitHub
 
-Pilih salah satu dari dua cara berikut.
-
-### Cara A — melalui perintah Git (disarankan)
-
-Buka Command Prompt atau Terminal, lalu masuk ke folder proyek:
+### Cara A — perintah Git (disarankan)
 
 ```bash
-cd D:\proyek\bbm-kima-dashboard      # Windows
-cd ~/proyek/bbm-kima-dashboard       # macOS atau Linux
-```
-
-Jalankan perintah berikut satu per satu:
-
-```bash
+cd D:\proyek\bbm-kima-dashboard
 git init
 git add .
 git commit -m "Dashboard rekap pembelian BBM KIMA"
@@ -156,194 +128,155 @@ git remote add origin https://github.com/NAMA-ANDA/bbm-kima-dashboard.git
 git push -u origin main
 ```
 
-Ganti `NAMA-ANDA` dengan nama pengguna GitHub Anda.
+Ganti `NAMA-ANDA` dengan nama pengguna GitHub pemilik repositori. Bila muncul
+jendela login, masuklah dengan akun **pemilik repositori tersebut**.
 
-Pada perintah terakhir, GitHub meminta autentikasi. Bila jendela login muncul,
-masuk seperti biasa. Bila yang diminta adalah kata sandi di dalam terminal,
-GitHub tidak lagi menerima kata sandi akun; Anda perlu membuat token:
+> Bila `git push` ditolak dengan pesan `Permission ... denied to NAMA-LAIN`,
+> komputer Anda sedang memakai kredensial akun GitHub lain. Lihat bagian 11.
 
-1. Buka <https://github.com/settings/tokens>.
-2. Pilih **Generate new token**, lalu **Generate new token (classic)**.
-3. Beri nama `push dashboard`, pilih masa berlaku, dan centang cakupan **repo**.
-4. Klik **Generate token**, lalu salin token yang muncul. Token hanya
-   ditampilkan satu kali.
-5. Tempelkan token itu sebagai pengganti kata sandi.
+### Cara B — unggah lewat halaman web
 
-### Cara B — melalui halaman web GitHub
-
-1. Pada halaman repositori yang baru dibuat, klik **uploading an existing file**.
-2. Seret seluruh isi folder `bbm-kima-dashboard` ke area unggah. Masukkan
-   isinya, bukan foldernya, agar `package.json` berada di tingkat teratas.
-3. Pastikan folder `node_modules` dan `.next` tidak ikut terunggah. Keduanya
-   berukuran besar dan dibuat ulang secara otomatis.
-4. Isi kotak **Commit changes** dengan keterangan singkat, lalu klik
-   **Commit changes**.
-
-Setelah selesai, halaman repositori menampilkan daftar berkas proyek.
+1. Pada halaman repositori, klik **uploading an existing file**.
+2. Seret **isi** folder proyek (bukan foldernya) ke area unggah, sehingga
+   `package.json` berada di tingkat teratas.
+3. Pastikan `node_modules`, `.next`, dan `.env.local` tidak ikut terunggah.
+4. Klik **Commit changes**.
 
 ---
 
 ## 5. Membuat akun dan proyek Supabase
 
-1. Buka <https://supabase.com>, klik **Start your project**.
-2. Pilih **Continue with GitHub** agar tidak perlu membuat kata sandi baru, lalu
-   setujui permintaan izinnya.
-3. Setelah masuk, klik **New project**.
-4. Isi formulir:
-   - **Organization**: pilih yang tersedia, atau buat baru dengan nama bebas.
-   - **Project name**: `bbm-kima-dashboard`.
-   - **Database Password**: klik **Generate a password**, lalu **simpan kata
-     sandi itu di tempat aman**. Kata sandi ini dipakai bila suatu saat Anda
-     menyambung ke basis data secara langsung.
-   - **Region**: pilih **Southeast Asia (Singapore)** karena paling dekat dengan
-     Makassar, sehingga halaman terasa lebih cepat.
-   - **Pricing plan**: **Free**.
-5. Klik **Create new project**, lalu tunggu satu sampai dua menit sampai status
-   proyek berubah menjadi aktif.
+1. Buka <https://supabase.com>, klik **Start your project**, lalu pilih
+   **Continue with GitHub**.
+2. Klik **New project**, lalu isi:
+   - **Project name**: `bbm-kima-dashboard`
+   - **Database Password**: klik **Generate a password** dan simpan di tempat aman.
+   - **Region**: **Southeast Asia (Singapore)**, paling dekat dengan Makassar.
+   - **Pricing plan**: **Free**
+3. Klik **Create new project**, tunggu satu sampai dua menit.
 
 ---
 
-## 6. Membuat tabel dan mengisi data
+## 6. Menyiapkan basis data
 
-Seluruh perintah basis data sudah disiapkan dalam tiga berkas di folder
-`supabase/`. Jalankan berurutan.
+Langkah ini hanya dilakukan **satu kali**.
 
-1. Pada menu kiri Supabase, klik ikon **SQL Editor**.
-2. Klik **New query**.
-3. Buka berkas `supabase/01_schema.sql` dengan Notepad atau editor teks,
-   salin seluruh isinya, lalu tempelkan ke kotak editor Supabase.
-4. Klik **Run** di kanan bawah. Hasil yang benar adalah pesan **Success**.
+1. Pada menu kiri Supabase, klik **SQL Editor**, lalu **New query**.
+2. Buka berkas `supabase/01_schema.sql` dengan Notepad, salin **seluruh**
+   isinya, lalu tempelkan ke editor.
+3. Pastikan tidak ada teks yang tersorot, lalu klik **Run**.
+4. Lihat hasil di bagian bawah. Harus muncul satu baris dengan tiga kolom:
 
-   Berkas ini membuat tabel `rekap_barang`, dua view ringkasan, indeks agar
-   pencarian cepat, dan aturan akses yang hanya mengizinkan pembacaan data.
+   | boleh_membaca | boleh_menambah | boleh_mengubah |
+   |---|---|---|
+   | true | true | true |
 
-5. Klik **New query** lagi. Salin isi `supabase/02_seed_sparepart.sql`,
-   tempelkan, lalu **Run**. Berkas ini memasukkan 688 baris data sparepart.
-6. Ulangi untuk `supabase/03_seed_service.sql` yang berisi 525 baris data
-   service.
+   Bila ketiganya `true`, basis data siap.
 
-> Berkas seed berukuran cukup besar. Bila editor terasa berat saat menempel,
-> tunggu beberapa detik sebelum menekan Run.
+Berkas ini membuat tabel `rekap_barang`, aturan agar satu barang pada satu harga
+tidak tercatat dua kali, fungsi penghitung frekuensi total, fungsi impor, dan
+hak akses. Berkas aman dijalankan ulang dan **tidak menghapus data**.
 
-### Memastikan data sudah masuk
+### Mengisi data awal
 
-Jalankan kueri berikut pada tab baru:
+Ada dua cara. Pilih salah satu.
 
-```sql
-select departemen, count(*) as baris, sum(frekuensi) as pembelian
-from public.rekap_barang
-group by departemen;
-```
-
-Hasil yang benar:
-
-| departemen | baris | pembelian |
-|---|---|---|
-| service | 525 | 720 |
-| sparepart | 688 | 888 |
+- **Cara yang disarankan:** biarkan tabel kosong. Setelah dashboard berjalan,
+  impor berkas Excel lewat halaman Admin (bagian 10.4).
+- **Cara lewat SQL:** jalankan isi `supabase/02_seed_sparepart.sql`, lalu
+  `supabase/03_seed_service.sql`, masing-masing pada tab kueri baru.
 
 ---
 
 ## 7. Mengambil kunci koneksi Supabase
 
-Dashboard memerlukan dua nilai untuk menyambung ke basis data.
+Dashboard memerlukan dua nilai dari Supabase.
 
-1. Pada menu kiri, klik ikon roda gigi **Project Settings**.
-2. Pilih **Data API** (pada sebagian tampilan bernama **API**).
-3. Salin dua nilai berikut:
-   - **Project URL**, berbentuk `https://xxxxxxxxxxxx.supabase.co`
-   - **anon public** pada bagian Project API keys, berupa teks panjang
+**Alamat proyek**
 
-Kunci `anon` memang dirancang untuk dipakai di sisi pengunjung dan aman
-ditempatkan di aplikasi web, selama aturan akses basis data sudah dibatasi.
-Aturan itu sudah diatur oleh `01_schema.sql`, yang hanya mengizinkan perintah
-baca.
+1. Buka **Project Settings** (ikon roda gigi), lalu **Data API**.
+2. Salin **Project URL**, berbentuk `https://abcdefghijklmnop.supabase.co`.
 
-> Jangan menyalin kunci **service_role**. Kunci tersebut memiliki akses penuh
-> dan tidak boleh keluar dari lingkungan pribadi Anda.
+**Secret key**
+
+1. Buka **Project Settings**, lalu **API Keys**.
+2. Pada bagian **Secret keys**, salin kunci berawalan `sb_secret_`. Bila belum
+   ada, klik **Create new secret key**.
+3. Bila tampilan Anda hanya menampilkan tab **Legacy API keys**, salin kunci
+   **service_role**, bukan **anon**.
+
+> ⚠️ Secret key memberi akses penuh ke basis data. Jangan dibagikan, jangan
+> ditempel di chat, dan jangan diberi awalan `NEXT_PUBLIC_`. Kunci ini hanya
+> disimpan di `.env.local` dan di pengaturan Vercel.
+>
+> Kunci **anon** atau **publishable** tidak dapat dipakai pada versi 2. Bila
+> tertukar, dashboard akan menampilkan pesan *permission denied*.
 
 ---
 
 ## 8. Menjalankan dashboard di komputer sendiri
 
-Langkah ini bersifat pilihan, tetapi berguna untuk memastikan semuanya benar
-sebelum diterbitkan.
-
-1. Buka Command Prompt atau Terminal di folder proyek.
-2. Pasang pustaka pendukung:
+1. Buka terminal di folder proyek, lalu pasang pustaka pendukung:
 
    ```bash
    npm install
    ```
 
-   Proses ini mengunduh berkas ke folder `node_modules` dan memakan waktu satu
-   sampai tiga menit.
-
-3. Buat berkas bernama `.env.local` di folder teratas proyek, dengan isi:
+2. Buat berkas `.env.local` di folder teratas proyek dengan isi berikut:
 
    ```
-   NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+   SUPABASE_URL=https://abcdefghijklmnop.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxxxxxxxxxxxxxxxxxx
+   ADMIN_PASSWORD=kata-sandi-admin-yang-panjang
    ```
 
-   Ganti kedua nilainya dengan yang Anda salin pada bagian 7. Jangan memberi
-   tanda kutip dan jangan menambahkan spasi di sekitar tanda sama dengan.
+   Aturan penulisan: tanpa tanda kutip, tanpa spasi di sekitar tanda sama
+   dengan, dan alamat proyek tanpa garis miring di akhir. `ADMIN_PASSWORD`
+   bebas Anda tentukan; gunakan minimal 12 karakter.
 
-4. Jalankan dashboard:
+3. Jalankan dashboard:
 
    ```bash
    npm run dev
    ```
 
-5. Buka <http://localhost:3000> pada peramban.
+4. Buka <http://localhost:3000>. Untuk halaman Admin, buka
+   <http://localhost:3000/admin> dan masuk dengan `ADMIN_PASSWORD`.
 
-Bila halaman menampilkan kartu ringkasan dan grafik barang tersering, berarti
-sambungan ke Supabase berhasil. Tekan `Ctrl + C` pada terminal untuk
-menghentikannya.
-
-Berkas `.env.local` sudah terdaftar pada `.gitignore`, sehingga tidak akan ikut
-terunggah ke GitHub.
+Setiap kali isi `.env.local` diubah, hentikan server dengan `Ctrl + C` lalu
+jalankan `npm run dev` kembali, karena berkas ini hanya dibaca saat server mulai.
 
 ---
 
-## 9. Membuat akun Vercel dan menerbitkan dashboard
+## 9. Menerbitkan dashboard di Vercel
 
-1. Buka <https://vercel.com/signup>.
-2. Pilih **Continue with GitHub**, lalu setujui permintaan izinnya.
-3. Saat ditanya jenis penggunaan, pilih **Hobby** yang merupakan paket gratis.
-   Isi nama tampilan bila diminta.
-4. Pada dasbor Vercel, klik **Add New**, lalu **Project**.
-5. Cari `bbm-kima-dashboard` pada daftar repositori, klik **Import**. Bila
-   repositori tidak muncul, klik **Adjust GitHub App Permissions** dan berikan
-   akses ke repositori tersebut.
-6. Pada halaman konfigurasi:
-   - **Framework Preset** akan terdeteksi sebagai **Next.js**. Biarkan.
-   - **Build Command**, **Output Directory**, dan **Install Command** dibiarkan
-     kosong atau bawaan.
-   - Buka bagian **Environment Variables**, lalu tambahkan dua baris:
+1. Buka <https://vercel.com/signup>, pilih **Continue with GitHub**, lalu pilih
+   paket **Hobby** (gratis).
+2. Klik **Add New**, lalu **Project**. Pilih `bbm-kima-dashboard`, klik
+   **Import**. Bila repositori tidak muncul, klik
+   **Adjust GitHub App Permissions** dan berikan akses.
+3. **Framework Preset** terdeteksi sebagai **Next.js**. Biarkan pengaturan lain.
+4. Buka **Environment Variables**, lalu tambahkan tiga baris:
 
-     | Name | Value |
-     |---|---|
-     | `NEXT_PUBLIC_SUPABASE_URL` | Project URL dari bagian 7 |
-     | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | kunci anon public dari bagian 7 |
+   | Name | Value |
+   |---|---|
+   | `SUPABASE_URL` | Project URL dari bagian 7 |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Secret key dari bagian 7 |
+   | `ADMIN_PASSWORD` | Kata sandi admin pilihan Anda |
 
-     Pastikan keduanya berlaku untuk lingkungan Production, Preview, dan
-     Development.
-7. Klik **Deploy**, lalu tunggu satu sampai tiga menit.
+5. Klik **Deploy**, tunggu satu sampai tiga menit.
 
-Setelah selesai, Vercel menampilkan pratinjau dan alamat publik berbentuk
-`https://bbm-kima-dashboard.vercel.app`. Alamat tersebut dapat dibuka siapa saja
-tanpa perlu masuk.
+Setelah selesai, dashboard dapat dibuka di alamat seperti
+`https://bbm-kima-dashboard.vercel.app`, dan halaman Admin di
+`https://bbm-kima-dashboard.vercel.app/admin`.
 
-### Mengubah alamat situs
+**Mengubah environment variable setelah deploy.** Buka **Settings**, lalu
+**Environment Variables**, ubah nilainya, kemudian buka **Deployments**, pilih
+deployment teratas, klik tombol titik tiga, dan pilih **Redeploy**. Nilai baru
+hanya berlaku pada deployment berikutnya.
 
-Buka **Settings**, lalu **Domains**, untuk mengganti alamat bawaan atau
-menambahkan domain sendiri bila nanti tersedia.
-
-### Menerbitkan perubahan berikutnya
-
-Setiap kali kode diubah dan dikirim ke GitHub, Vercel membangun ulang situs
-secara otomatis:
+**Menerbitkan perubahan kode berikutnya.** Cukup kirim ke GitHub; Vercel
+membangun ulang secara otomatis:
 
 ```bash
 git add .
@@ -353,96 +286,202 @@ git push
 
 ---
 
-## 10. Memperbarui data periode berikutnya
+## 10. Memakai halaman Admin
 
-Data di dashboard berasal dari tabel Supabase, sehingga pembaruan dilakukan di
-sana, bukan di kode.
+### 10.1 Masuk dan keluar
 
-### Bila format sheet analisis tetap sama
+Buka `/admin`, masukkan kata sandi, lalu klik **Masuk**. Sesi berlaku 12 jam.
+Klik **Keluar** di kanan atas bila memakai komputer bersama. Mengganti
+`ADMIN_PASSWORD` otomatis mengeluarkan semua sesi yang masih aktif.
 
-1. Siapkan berkas Excel rekap yang sudah memuat sheet analisis dengan susunan
-   kolom NO, NO. PART, NAMA BARANG, HARGA SATUAN, FREKUENSI, dan FREKUENSI
-   TOTAL, dimulai pada baris ke-8.
-2. Pasang pustaka pembaca Excel, sekali saja:
+Gunakan pilihan **Sparepart** dan **Service** di kanan atas untuk berpindah
+departemen.
 
-   ```bash
-   pip install openpyxl
-   ```
+### 10.2 Mengubah data langsung di tabel
 
-3. Buat ulang berkas seed:
+1. Klik sel yang ingin diubah: nomor part, nama barang, harga satuan, atau
+   frekuensi.
+2. Ketik nilai baru.
+3. Tekan **Enter** atau klik di luar sel untuk menyimpan. Tekan **Esc** untuk
+   membatalkan.
 
-   ```bash
-   python tools/generate_seed.py rekap_sparepart.xlsx "ANALISIS MALLOMO" sparepart
-   python tools/generate_seed.py rekap_service.xlsx "ANALISIS JAN-AGU 2026" service
-   ```
+Pesan di atas tabel memberi tahu apakah perubahan tersimpan. Bila nilai ditolak,
+sel tetap terbuka dan pesan menjelaskan alasannya.
 
-4. Buka Supabase SQL Editor, jalankan isi berkas seed yang baru. Setiap berkas
-   diawali perintah `delete` untuk departemen bersangkutan, sehingga data lama
-   diganti, bukan bertumpuk.
-5. Muat ulang dashboard. Halaman menyimpan hasil selama lima menit, jadi
-   perubahan tampak paling lambat lima menit kemudian.
+Beberapa aturan yang dijaga otomatis:
 
-### Menambah data tanpa menghapus yang lama
+- **Frekuensi total** tidak diubah manual. Nilainya dihitung ulang dari seluruh
+  varian harga barang yang sama setiap kali ada perubahan, sehingga tidak pernah
+  selisih dengan rinciannya.
+- Nama barang dan nomor part disimpan dalam huruf besar, dengan spasi ganda
+  dirapikan, agar barang yang sama tidak tercatat sebagai barang berbeda.
+- Harga dapat diketik sebagai `1250000` maupun `Rp 1.250.000`.
+- Satu barang pada satu harga hanya boleh ada satu baris. Bila Anda membeli lagi
+  barang yang sama dengan harga yang sama, tambahkan frekuensinya, bukan
+  barisnya.
 
-Bila Anda ingin menyimpan beberapa periode sekaligus, tambahkan kolom periode
-pada tabel, lalu sesuaikan kueri di `lib/data.ts`. Perubahan ini mengubah
-struktur, jadi sebaiknya dicoba lebih dahulu di proyek Supabase terpisah.
+### 10.3 Menambah dan menghapus baris
+
+**Menambah:** isi kotak di atas tabel (nomor part boleh dikosongkan), lalu klik
+**Tambah barang**.
+
+**Menghapus:** klik **Hapus** di ujung baris, lalu konfirmasi.
+
+### 10.4 Mengimpor dari Excel
+
+1. Pada panel **Impor dari Excel**, pilih berkas `.xlsx`.
+2. Pilih cara impor:
+   - **Ganti seluruh data** — data departemen ini dihapus dan diganti isi
+     berkas. Cocok untuk memuat rekap periode baru secara utuh.
+   - **Tambahkan ke data yang ada** — frekuensi barang yang sama pada harga yang
+     sama dijumlahkan, barang baru disisipkan. Cocok untuk menambahkan rekap
+     satu bulan.
+3. Klik **Periksa berkas**. Data belum berubah pada tahap ini.
+4. Periksa pratinjau: daftar sheet yang ditemukan, jumlah barang, jumlah
+   pembelian, dan contoh baris. Centang atau hapus centang sheet sesuai
+   kebutuhan; pratinjau diperbarui otomatis.
+5. Klik tombol simpan di bawah pratinjau, lalu konfirmasi.
+
+Berkas yang dapat dibaca:
+
+| Jenis berkas | Cara dibaca |
+|---|---|
+| Hasil **Ekspor ke Excel** dari dashboard | Apa adanya |
+| Sheet analisis berkolom FREKUENSI (misalnya `ANALISIS MALLOMO`) | Apa adanya; dipilih otomatis bila ada |
+| Sheet rekap bulanan tanpa kolom FREKUENSI | Setiap baris dihitung satu kali pembelian |
+
+Syaratnya, setiap sheet memiliki baris judul yang memuat **NAMA BARANG** dan
+**HARGA SATUAN** (atau **SATUAN**). Kolom **NO. PART** dan **FREKUENSI** dibaca
+bila ada. Baris judul boleh berada di mana saja pada 40 baris pertama.
+
+> Impor dari sheet rekap bulanan **tidak membaca warna sel**. Untuk departemen
+> sparepart yang hanya menghitung nota Mallomo (bertanda biru), impor sheet
+> hasil analisis, bukan sheet bulanan mentah.
+
+Impor berjalan dalam satu transaksi: bila terjadi kesalahan di tengah jalan,
+tidak ada data yang berubah sama sekali.
+
+### 10.5 Mengekspor ke Excel
+
+Klik **Ekspor ke Excel** di kanan atas. Berkas yang terunduh berisi seluruh
+data departemen yang sedang dibuka, dengan kolom yang sama seperti sheet
+analisis. Berkas ini dapat diedit di Excel lalu diimpor kembali memakai mode
+**Ganti seluruh data**.
 
 ---
 
 ## 11. Pemecahan masalah
 
-**Dashboard menampilkan tulisan "belum terhubung ke Supabase".**
-Environment variable belum terbaca. Di komputer sendiri, periksa nama berkas
-harus tepat `.env.local` dan jalankan ulang `npm run dev`. Di Vercel, periksa
-ejaan nama variabel, lalu buka **Deployments**, pilih yang terbaru, dan klik
-**Redeploy**, karena nilai baru hanya terpakai pada pembangunan berikutnya.
+Pesan galat ditampilkan di layar. Cocokkan dengan daftar berikut.
 
-**Halaman terbuka tetapi seluruh angka bernilai nol.**
-Berkas seed belum dijalankan atau gagal. Jalankan kueri pemeriksaan pada bagian
-6 untuk memastikan jumlah barisnya.
+**"Dashboard belum terhubung ke Supabase"**
+Environment variable belum terbaca. Periksa nama berkas harus tepat
+`.env.local` dan jalankan ulang `npm run dev`. Di Vercel, periksa ejaan nama
+variabel, lalu lakukan **Redeploy**.
 
-**Muncul pesan galat berisi "permission denied for table rekap_barang".**
-Berkas `01_schema.sql` belum dijalankan sampai selesai. Jalankan ulang seluruh
-isinya; berkas tersebut aman dijalankan berkali-kali karena diawali perintah
-`drop` yang bersyarat.
+**"Invalid path specified in request URL"**
+Nilai `SUPABASE_URL` salah bentuk. Isinya harus berakhir di `.supabase.co`,
+tanpa `/rest/v1`, tanpa tanda kutip.
 
-**Pembangunan di Vercel gagal dengan pesan tentang modul yang tidak ditemukan.**
-Folder `node_modules` mungkin ikut terunggah dan membuat isinya tidak
-konsisten. Hapus folder tersebut dari repositori, lalu kirim ulang.
+**"Invalid API key"** atau **"Unregistered API key"**
+Secret key salah salin atau berasal dari proyek lain. Salin ulang dari
+**Project Settings** lalu **API Keys** pada proyek yang benar.
 
-**`git push` ditolak dengan pesan "Authentication failed".**
-Gunakan token akses pribadi sebagai pengganti kata sandi, seperti dijelaskan
-pada bagian 4.
+**"Server tidak memiliki izin ke tabel rekap_barang"** atau **"permission denied"**
+Ada dua kemungkinan. Pertama, `SUPABASE_SERVICE_ROLE_KEY` berisi kunci anon atau
+publishable; ganti dengan secret key (bagian 7). Kedua, berkas
+`01_schema.sql` versi 2 belum dijalankan; jalankan seluruh isinya dan pastikan
+ketiga kolom pemeriksaan bernilai `true`.
 
-**Proyek Supabase berstatus dijeda.**
-Pada paket gratis, proyek yang tidak dipakai selama kurang lebih satu minggu
-akan dijeda. Buka dasbor Supabase lalu klik **Restore project**. Data tidak
-hilang.
+**"Fungsi basis data belum tersedia"**
+Berkas `01_schema.sql` yang dijalankan masih versi 1. Jalankan isi berkas versi
+terbaru dari folder `supabase/`.
+
+**"Halaman admin belum diaktifkan"** pada halaman masuk
+`ADMIN_PASSWORD` atau `SUPABASE_SERVICE_ROLE_KEY` belum diisi.
+
+**"Tidak ditemukan tabel yang dapat diimpor"**
+Tidak ada sheet yang memiliki baris judul berisi NAMA BARANG dan HARGA SATUAN.
+Periksa ejaan judul kolom pada berkas.
+
+**"Format berkas harus .xlsx"**
+Buka berkas di Excel, pilih **File**, **Save As**, lalu pilih jenis
+**Excel Workbook (*.xlsx)**.
+
+**`git push` ditolak dengan pesan "Permission ... denied to NAMA-LAIN"**
+Windows menyimpan kredensial akun GitHub lain. Buka **Credential Manager**, pilih
+**Windows Credentials**, hapus entri `git:https://github.com`, keluar dari akun
+GitHub lama di peramban, lalu jalankan `git push` lagi dan masuk dengan akun
+pemilik repositori.
+
+**Proyek Supabase berstatus dijeda**
+Proyek gratis yang tidak dipakai sekitar satu minggu akan dijeda. Buka dasbor
+Supabase, klik **Restore project**. Data tidak hilang.
 
 ---
 
 ## 12. Catatan keamanan dan batas paket gratis
 
-**Yang boleh dan tidak boleh dibagikan.** Kunci `anon` aman berada di aplikasi
-web karena aturan akses membatasinya pada perintah baca. Kata sandi basis data
-dan kunci `service_role` tidak boleh dibagikan maupun dimasukkan ke dalam kode.
+**Rahasia yang harus dijaga.** Secret key Supabase, kata sandi basis data, dan
+`ADMIN_PASSWORD`. Ketiganya tidak pernah masuk ke GitHub karena `.env.local`
+sudah tercantum di `.gitignore`.
 
-**Data dashboard bersifat publik.** Siapa pun yang mengetahui alamatnya dapat
-melihat nama barang, nomor part, dan harga satuan. Bila informasi harga dinilai
-sensitif, tambahkan autentikasi Supabase sebelum alamatnya disebarkan.
+**Halaman publik tetap terbuka.** Siapa pun yang mengetahui alamat dashboard
+dapat melihat nama barang, nomor part, dan harga satuan, tetapi tidak dapat
+mengubahnya. Perubahan data hanya dapat dilakukan setelah masuk ke halaman Admin.
 
-**Batas paket gratis yang perlu diketahui:**
+**Kata sandi admin.** Gunakan minimal 12 karakter dan jangan memakai kata sandi
+yang sama dengan akun lain. Server menambahkan jeda pada setiap percobaan masuk
+yang gagal untuk memperlambat upaya menebak.
 
-| Layanan | Batas utama |
+**Cadangan data.** Lakukan **Ekspor ke Excel** untuk kedua departemen secara
+berkala, misalnya setiap akhir bulan. Berkas ekspor dapat diimpor kembali kapan
+saja untuk memulihkan data.
+
+| Layanan | Batas utama paket gratis |
 |---|---|
-| Supabase | Penyimpanan 500 MB dan proyek dijeda setelah kurang lebih satu minggu tanpa aktivitas |
-| Vercel | Penggunaan wajar untuk keperluan bukan komersial, dengan kuota bandwidth bulanan |
+| Supabase | Penyimpanan 500 MB; proyek dijeda setelah sekitar satu minggu tanpa aktivitas |
+| Vercel | Penggunaan bukan komersial dengan kuota bulanan; unggahan maksimal sekitar 4,5 MB per berkas |
 | GitHub | Repositori publik maupun privat tanpa batas jumlah |
 
-Data 1.213 baris pada dashboard ini hanya memakai ruang beberapa ratus kilobita,
-jauh di bawah batas tersebut.
+---
 
-**Cadangan data.** Berkas seed di folder `supabase/` adalah salinan lengkap data
-yang ada di basis data. Selama repositori GitHub terjaga, data selalu dapat
-dipulihkan dengan menjalankan ulang ketiga berkas SQL.
+## 13. Memperbarui dari versi 1
+
+Bagian ini untuk Anda yang sudah memasang versi 1 dan mengalami pesan
+*permission denied*. Versi 2 mengatasi masalah tersebut dengan tidak lagi
+memakai kunci anon, sekaligus menambahkan halaman Admin.
+
+1. **Ganti berkas proyek.** Ekstrak ZIP versi 2, lalu salin seluruh isinya ke
+   folder proyek lama dan timpa berkas yang sama. Folder `.git` dan berkas
+   `.env.local` milik Anda tetap dipertahankan.
+
+2. **Jalankan skema versi 2.** Di Supabase SQL Editor, jalankan seluruh isi
+   `supabase/01_schema.sql` yang baru. Data yang sudah ada tidak terhapus.
+   Pastikan ketiga kolom pemeriksaan bernilai `true`.
+
+3. **Perbarui `.env.local`.** Ganti isinya menjadi tiga baris pada bagian 8.
+   Nama variabel berubah: `NEXT_PUBLIC_SUPABASE_URL` menjadi `SUPABASE_URL`,
+   dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` dihapus, diganti
+   `SUPABASE_SERVICE_ROLE_KEY` berisi secret key.
+
+4. **Pasang ulang pustaka dan coba.**
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+   Buka <http://localhost:3000> dan <http://localhost:3000/admin>.
+
+5. **Perbarui Vercel.** Pada **Settings**, **Environment Variables**, hapus dua
+   variabel lama yang berawalan `NEXT_PUBLIC_`, lalu tambahkan tiga variabel dari
+   bagian 9.
+
+6. **Kirim ke GitHub.** Vercel membangun ulang otomatis.
+
+   ```bash
+   git add .
+   git commit -m "Versi 2: halaman admin, impor dan ekspor Excel"
+   git push
+   ```

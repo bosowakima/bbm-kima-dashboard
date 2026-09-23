@@ -1,6 +1,8 @@
 import HalamanDepartemen, { ParamHalaman } from "@/components/halaman-departemen";
 
-export const revalidate = 300;
+// Selalu mengambil data terbaru, sehingga perubahan dari halaman Admin langsung terlihat
+// dan proses build di Vercel tidak bergantung pada koneksi ke Supabase.
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Service — Rekap Pembelian BBM KIMA",

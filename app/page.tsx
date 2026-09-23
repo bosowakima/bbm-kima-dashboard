@@ -6,7 +6,9 @@ import TanggaFrekuensi from "@/components/tangga-frekuensi";
 import PemberitahuanSetup from "@/components/pemberitahuan-setup";
 import { Panel } from "@/components/panel";
 
-export const revalidate = 300;
+// Selalu mengambil data terbaru, sehingga perubahan dari halaman Admin langsung terlihat
+// dan proses build di Vercel tidak bergantung pada koneksi ke Supabase.
+export const dynamic = "force-dynamic";
 
 const WARNA: Record<Departemen, string> = {
   sparepart: "#C8102E",
