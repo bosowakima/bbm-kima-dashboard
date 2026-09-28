@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { BarisRekap } from "@/lib/data";
+import Paginasi from "@/components/paginasi";
+import type { BarisRekap } from "@/lib/barang";
+import TabelRekapPublik, { type JudulKolom } from "@/components/rekap/tabel-rekap-publik";
 import { formatAngka, formatRupiah } from "@/lib/format";
 
 type Props = {
@@ -47,6 +49,18 @@ export default function TabelBarang({
   arah,
 }: Props) {
   const kini = { cari, urut, arah, halaman };
+  const judul: JudulKolom[] = KOLOM.map((kolom) => {
+    const aktif = urut === kolom.kunci;
+    const arahBaru = aktif && arah === "desc" ? "asc" : "desc";
+    return {
+      kunci: kolom.kunci,
+      label: kolom.label,
+      rata: kolom.rata as JudulKolom["rata"],
+      aktif,
+      arah,
+      href: buatUrl(jalur, { urut: kolom.kunci, arah: arahBaru, halaman: undefined }, kini),
+    };
+  });
   const totalHalaman = Math.max(1, Math.ceil(jumlah / perHalaman));
   const awal = jumlah === 0 ? 0 : (halaman - 1) * perHalaman + 1;
   const akhir = Math.min(halaman * perHalaman, jumlah);
@@ -54,7 +68,7 @@ export default function TabelBarang({
   return (
     <div>
       <form
-        action={jalur}
+        action={`${jalur}#daftar`}
         method="get"
         className="flex flex-wrap items-center gap-2"
       >
@@ -86,102 +100,24 @@ export default function TabelBarang({
         ) : null}
       </form>
 
-      <div className="mt-4 overflow-x-auto rounded-lg border border-line">
-        <table className="w-full min-w-[720px] border-collapse bg-panel text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-[13px] text-muted">
-              {KOLOM.map((kolom) => {
-                const aktif = urut === kolom.kunci;
-                const arahBaru = aktif && arah === "desc" ? "asc" : "desc";
-                return (
-                  <th
-                    key={kolom.kunci}
-                    scope="col"
-                    className={`px-4 py-3 font-medium ${kolom.rata}`}
-                  >
-                    <Link
-                      href={buatUrl(
-                        jalur,
-                        { urut: kolom.kunci, arah: arahBaru, halaman: undefined },
-                        kini
-                      )}
-                      className={`hover:text-ink ${aktif ? "text-ink" : ""}`}
-                    >
-                      {kolom.label}
-                      {aktif ? (arah === "desc" ? " ↓" : " ↑") : ""}
-                    </Link>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {baris.length === 0 ? (
-              <tr>
-                <td colSpan={KOLOM.length} className="px-4 py-10 text-center text-muted">
-                  Tidak ada barang yang cocok dengan pencarian ini. Coba kata
-                  kunci yang lebih pendek.
-                </td>
-              </tr>
-            ) : (
-              baris.map((item) => (
-                <tr key={item.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 font-mono text-[13px] text-slate">
-                    {item.no_part}
-                  </td>
-                  <td className="px-4 py-3 text-ink">{item.nama_barang}</td>
-                  <td className="tabular px-4 py-3 text-right text-ink">
-                    {formatRupiah(item.harga_satuan)}
-                  </td>
-                  <td className="tabular px-4 py-3 text-right text-slate">
-                    {formatAngka(item.frekuensi)}
-                  </td>
-                  <td className="tabular px-4 py-3 text-right text-slate">
-                    {formatAngka(item.frekuensi_total)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <p className="mt-3 text-[13px] text-muted">
+        Warna latar yang sama menandai barang yang sama pada harga berbeda. Klik panah atau nama barang
+        untuk melihat seluruh tanggal nota.
+      </p>
+      <TabelRekapPublik baris={baris} judul={judul} />
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate">
-        <span className="tabular">
-          Menampilkan {formatAngka(awal)}–{formatAngka(akhir)} dari{" "}
-          {formatAngka(jumlah)} baris
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <span className="tabular text-sm text-slate">
+          Menampilkan {formatAngka(awal)}–{formatAngka(akhir)} dari {formatAngka(jumlah)} baris
         </span>
-        <div className="flex items-center gap-2">
-          <Link
-            href={buatUrl(jalur, { halaman: Math.max(1, halaman - 1) }, kini)}
-            aria-disabled={halaman <= 1}
-            className={`rounded-md border border-line px-3 py-2 ${
-              halaman <= 1
-                ? "pointer-events-none text-muted opacity-50"
-                : "hover:bg-surface"
-            }`}
-          >
-            Sebelumnya
-          </Link>
-          <span className="tabular text-muted">
-            Halaman {halaman} dari {totalHalaman}
-          </span>
-          <Link
-            href={buatUrl(
-              jalur,
-              { halaman: Math.min(totalHalaman, halaman + 1) },
-              kini
-            )}
-            aria-disabled={halaman >= totalHalaman}
-            className={`rounded-md border border-line px-3 py-2 ${
-              halaman >= totalHalaman
-                ? "pointer-events-none text-muted opacity-50"
-                : "hover:bg-surface"
-            }`}
-          >
-            Berikutnya
-          </Link>
-        </div>
+        <Paginasi
+          halaman={halaman}
+          totalHalaman={totalHalaman}
+          hrefHalaman={(n) => buatUrl(jalur, { halaman: n > 1 ? n : undefined }, kini)}
+          jalur={jalur}
+          paramLain={{ cari: cari || undefined, urut, arah }}
+          jangkar="daftar"
+        />
       </div>
     </div>
   );

@@ -26,20 +26,32 @@ export type BarangRingkas = {
   estimasi_nilai: number;
 };
 
-export type BarisRekap = {
-  id: number;
-  departemen: Departemen;
-  no_urut: number;
-  no_part: string;
-  nama_barang: string;
-  harga_satuan: number;
-  frekuensi: number;
-  frekuensi_total: number;
-};
+export type { Nota, BarisRekap } from "./barang";
+import type { BarisRekap, Nota } from "./barang";
+
+/** Kolom yang diambil dari Supabase: baris rekap beserta seluruh tanggal notanya. */
+const PILIH = "*, nota:nota_pembelian(id, tanggal_nota, no_gr, qty)";
+
+/** Tanggal terbaru di atas; nota tanpa tanggal di paling bawah. */
+export function urutkanNota(nota: Nota[] | null | undefined): Nota[] {
+  return [...(nota ?? [])].sort((a, b) => {
+    if (a.tanggal_nota === b.tanggal_nota) return b.id - a.id;
+    if (!a.tanggal_nota) return 1;
+    if (!b.tanggal_nota) return -1;
+    return a.tanggal_nota < b.tanggal_nota ? 1 : -1;
+  });
+}
+
+function rapikanBaris(data: unknown[] | null): BarisRekap[] {
+  return ((data ?? []) as BarisRekap[]).map((b) => ({ ...b, nota: urutkanNota(b.nota) }));
+}
 
 export type HasilTabel = {
   baris: BarisRekap[];
   jumlah: number;
+  /** Halaman yang benar-benar ditampilkan; bisa lebih kecil dari yang diminta. */
+  halaman: number;
+  totalHalaman: number;
 };
 
 /**
@@ -57,12 +69,12 @@ async function ambilBarisDepartemen(departemen: Departemen): Promise<BarisRekap[
   for (let dari = 0; ; dari += UKURAN) {
     const { data, error } = await db
       .from("rekap_barang")
-      .select("*")
+      .select(PILIH)
       .eq("departemen", departemen)
       .order("id", { ascending: true })
       .range(dari, dari + UKURAN - 1);
     if (error) throw new Error(pesanGalatDb(error));
-    const potongan = (data ?? []) as BarisRekap[];
+    const potongan = rapikanBaris(data);
     semua.push(...potongan);
     if (potongan.length < UKURAN) break;
   }
@@ -140,33 +152,62 @@ const KOLOM_URUT = new Set([
 
 export async function ambilTabel(opsi: OpsiTabel): Promise<HasilTabel> {
   const db = getSupabase();
-  if (!db) return { baris: [], jumlah: 0 };
+  if (!db) return { baris: [], jumlah: 0, halaman: 1, totalHalaman: 1 };
 
   const perHalaman = opsi.perHalaman ?? 25;
-  const halaman = Math.max(1, opsi.halaman ?? 1);
-  const urut = opsi.urut && KOLOM_URUT.has(opsi.urut) ? opsi.urut : "frekuensi_total";
-  const naik = opsi.arah === "asc";
-
-  let kueri = db
-    .from("rekap_barang")
-    .select("*", { count: "exact" })
-    .eq("departemen", opsi.departemen);
+  const diminta = Math.max(1, Math.floor(opsi.halaman ?? 1) || 1);
+  // Urutan bawaan memakai no_urut: frekuensi total terbesar di atas, varian harga dari
+  // barang yang sama berdampingan, dan varian dengan nota terbaru paling atas.
+  const urut = opsi.urut && KOLOM_URUT.has(opsi.urut) ? opsi.urut : "no_urut";
+  const naik = urut === "no_urut" ? opsi.arah !== "desc" : opsi.arah === "asc";
 
   // Tanda baca yang punya arti khusus pada filter Supabase dibuang dari kata kunci.
   const cari = opsi.cari?.replace(/[,()*%\\:"]/g, " ").trim();
-  if (cari) {
-    const pola = `%${cari}%`;
-    kueri = kueri.or(`nama_barang.ilike.${pola},no_part.ilike.${pola}`);
+
+  const ambil = (halaman: number) => {
+    let kueri = db
+      .from("rekap_barang")
+      .select(PILIH, { count: "exact" })
+      .eq("departemen", opsi.departemen);
+    if (cari) {
+      const pola = `%${cari}%`;
+      kueri = kueri.or(`nama_barang.ilike.${pola},no_part.ilike.${pola}`);
+    }
+    const dari = (halaman - 1) * perHalaman;
+    return kueri
+      .order(urut, { ascending: naik })
+      .order("no_urut", { ascending: true })
+      .order("id", { ascending: true })
+      .range(dari, dari + perHalaman - 1);
+  };
+
+  let halaman = diminta;
+  let { data, count, error, status } = await ambil(halaman);
+
+  // Nomor halaman melebihi jumlah data: Supabase menolaknya dengan status 416 (kode PGRST103)
+  // atau mengembalikan daftar kosong. Dalam kedua kasus, halaman terakhir yang ditampilkan.
+  const diLuarRentang = status === 416 || error?.code === "PGRST103";
+  if (diLuarRentang || (!error && (data?.length ?? 0) === 0 && halaman > 1)) {
+    let jumlah = diLuarRentang ? null : count ?? null;
+    if (jumlah === null) {
+      let hitung = db.from("rekap_barang").select("id", { count: "exact", head: true }).eq("departemen", opsi.departemen);
+      if (cari) hitung = hitung.or(`nama_barang.ilike.%${cari}%,no_part.ilike.%${cari}%`);
+      const h = await hitung;
+      if (h.error) throw new Error(pesanGalatDb(h.error));
+      jumlah = h.count ?? 0;
+    }
+    halaman = Math.max(1, Math.ceil(jumlah / perHalaman));
+    ({ data, count, error } = await ambil(halaman));
   }
 
-  const dari = (halaman - 1) * perHalaman;
-  const { data, count, error } = await kueri
-    .order(urut, { ascending: naik })
-    .order("id", { ascending: true })
-    .range(dari, dari + perHalaman - 1);
-
   if (error) throw new Error(pesanGalatDb(error));
-  return { baris: (data ?? []) as BarisRekap[], jumlah: count ?? 0 };
+  const jumlah = count ?? 0;
+  return {
+    baris: rapikanBaris(data),
+    jumlah,
+    halaman,
+    totalHalaman: Math.max(1, Math.ceil(jumlah / perHalaman)),
+  };
 }
 
 /** Seluruh baris satu departemen, diurutkan seperti di Excel. Dipakai untuk ekspor. */

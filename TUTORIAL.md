@@ -1,4 +1,4 @@
-# Modul Tutorial: Dashboard Rekap Pembelian BBM KIMA (versi 2)
+# Modul Tutorial: Dashboard Rekap Pembelian BBM KIMA (versi 3)
 
 Panduan ini membawa Anda dari keadaan belum memiliki akun apa pun sampai
 dashboard dapat dibuka publik, lengkap dengan halaman Admin untuk mengubah data,
@@ -7,8 +7,8 @@ gratis dan tidak meminta kartu kredit.
 
 Perkiraan waktu pengerjaan pertama kali: 45 sampai 60 menit.
 
-> **Sudah memasang versi 1?** Langsung ke
-> [bagian 13, Memperbarui dari versi 1](#13-memperbarui-dari-versi-1).
+> **Sudah memasang versi sebelumnya?** Langsung ke
+> [bagian 13, Memperbarui dari versi sebelumnya](#13-memperbarui-dari-versi-sebelumnya).
 
 ---
 
@@ -26,7 +26,7 @@ Perkiraan waktu pengerjaan pertama kali: 45 sampai 60 menit.
 10. [Memakai halaman Admin](#10-memakai-halaman-admin)
 11. [Pemecahan masalah](#11-pemecahan-masalah)
 12. [Catatan keamanan dan batas paket gratis](#12-catatan-keamanan-dan-batas-paket-gratis)
-13. [Memperbarui dari versi 1](#13-memperbarui-dari-versi-1)
+13. [Memperbarui dari versi sebelumnya](#13-memperbarui-dari-versi-sebelumnya)
 
 ---
 
@@ -165,26 +165,37 @@ Langkah ini hanya dilakukan **satu kali**.
 2. Buka berkas `supabase/01_schema.sql` dengan Notepad, salin **seluruh**
    isinya, lalu tempelkan ke editor.
 3. Pastikan tidak ada teks yang tersorot, lalu klik **Run**.
-4. Lihat hasil di bagian bawah. Harus muncul satu baris dengan tiga kolom:
+4. Lihat hasil di bagian bawah. Harus muncul satu baris dengan empat kolom:
 
-   | boleh_membaca | boleh_menambah | boleh_mengubah |
-   |---|---|---|
-   | true | true | true |
+   | boleh_membaca | boleh_mengubah | tabel_nota_siap | fungsi_impor_siap |
+   |---|---|---|---|
+   | true | true | true | true |
 
-   Bila ketiganya `true`, basis data siap.
+   Bila keempatnya `true`, basis data siap.
 
-Berkas ini membuat tabel `rekap_barang`, aturan agar satu barang pada satu harga
-tidak tercatat dua kali, fungsi penghitung frekuensi total, fungsi impor, dan
-hak akses. Berkas aman dijalankan ulang dan **tidak menghapus data**.
+   > Bila yang muncul hanya **"Success. No rows returned"**, berkas yang
+   > dijalankan bukan versi 3. Buka berkasnya dan pastikan baris kedua
+   > bertuliskan `(versi 3)`, lalu jalankan ulang.
+
+Berkas ini membuat tabel `rekap_barang` (satu baris per barang per harga),
+tabel `nota_pembelian` (tanggal nota, No. GR, dan qty setiap pembelian), aturan
+agar satu barang pada satu harga tidak tercatat dua kali, fungsi penghitung
+frekuensi total dan urutan, fungsi impor, serta hak akses. Berkas aman
+dijalankan ulang dan **tidak menghapus data**.
 
 ### Mengisi data awal
 
 Ada dua cara. Pilih salah satu.
 
 - **Cara yang disarankan:** biarkan tabel kosong. Setelah dashboard berjalan,
-  impor berkas Excel lewat halaman Admin (bagian 10.4).
+  buka halaman Admin dan impor dua berkas di folder `data-awal/` dengan mode
+  **Ganti seluruh data** (bagian 10.4):
+  `data-awal-sparepart.xlsx` di halaman Admin Sparepart, dan
+  `data-awal-service.xlsx` di halaman Admin Service. Kedua berkas sudah memuat
+  seluruh tanggal nota Januari sampai Agustus 2026.
 - **Cara lewat SQL:** jalankan isi `supabase/02_seed_sparepart.sql`, lalu
-  `supabase/03_seed_service.sql`, masing-masing pada tab kueri baru.
+  `supabase/03_seed_service.sql`, masing-masing pada tab kueri baru. Isinya
+  sama dengan berkas data awal di atas.
 
 ---
 
@@ -320,14 +331,47 @@ Beberapa aturan yang dijaga otomatis:
   barang yang sama dengan harga yang sama, tambahkan frekuensinya, bukan
   barisnya.
 
-### 10.3 Menambah dan menghapus baris
+### 10.3 Melihat dan mengelola tanggal nota
+
+Di bawah setiap nama barang tertulis tanggal nota terakhir dan jumlah notanya,
+misalnya *Nota terakhir 31 Agu 2026 · 6 nota*.
+
+Klik **panah** di kiri baris untuk membuka detail. Detail berisi nomor part,
+harga, frekuensi, estimasi nilai, dan daftar seluruh nota (tanggal, No. GR,
+qty), **terbaru di atas**. Panah di judul kolom membuka atau menutup semua
+detail sekaligus.
+
+Di halaman Admin, detail juga memuat formulir **Tambah tanggal nota** dan
+tombol **Hapus** untuk setiap nota. Frekuensi tidak berubah otomatis saat
+tanggal ditambah atau dihapus; bila jumlah nota berbeda dengan frekuensi,
+detail menampilkan keterangan agar Anda dapat menyesuaikannya.
+
+**Urutan daftar.** Barang dengan frekuensi total terbesar berada di atas.
+Varian harga dari nomor part yang sama selalu berdampingan, dan di antara
+varian itu yang tanggal notanya paling baru berada paling atas. Urutan ini
+diperbarui otomatis setiap kali data atau tanggal nota berubah.
+
+**Warna latar.** Baris dengan nomor part yang sama (atau nama barang yang sama
+bila nomor part kosong) memakai warna lembut yang sama, sehingga varian harga
+satu barang mudah dikenali. Saat kursor diarahkan ke sebuah baris, nama
+barangnya disorot kuning dan seluruh baris dengan nomor part yang sama ikut
+sedikit menebal warnanya.
+
+**Berpindah halaman.** Di bawah daftar tersedia tombol nomor halaman (halaman
+pertama, halaman di sekitar posisi sekarang, dan halaman terakhir), tombol
+Sebelumnya dan Berikutnya, serta kotak **Ke halaman**. Ketik nomornya lalu klik
+**Buka** atau tekan Enter. Pencarian dan urutan kolom yang sedang aktif tetap
+dipertahankan, dan layar langsung diarahkan ke daftar. Daftar publik memuat 25
+baris per halaman, halaman Admin 50 baris.
+
+### 10.4 Menambah dan menghapus baris
 
 **Menambah:** isi kotak di atas tabel (nomor part boleh dikosongkan), lalu klik
 **Tambah barang**.
 
 **Menghapus:** klik **Hapus** di ujung baris, lalu konfirmasi.
 
-### 10.4 Mengimpor dari Excel
+### 10.5 Mengimpor dari Excel
 
 1. Pada panel **Impor dari Excel**, pilih berkas `.xlsx`.
 2. Pilih cara impor:
@@ -346,13 +390,19 @@ Berkas yang dapat dibaca:
 
 | Jenis berkas | Cara dibaca |
 |---|---|
-| Hasil **Ekspor ke Excel** dari dashboard | Apa adanya |
-| Sheet analisis berkolom FREKUENSI (misalnya `ANALISIS MALLOMO`) | Apa adanya; dipilih otomatis bila ada |
-| Sheet rekap bulanan tanpa kolom FREKUENSI | Setiap baris dihitung satu kali pembelian |
+| Hasil **Ekspor ke Excel** dan berkas di folder `data-awal/` | Lengkap dengan tanggal nota, No. GR, dan qty |
+| Sheet analisis berkolom FREKUENSI (misalnya `ANALISIS MALLOMO`) | Frekuensi dibaca apa adanya, **tanpa** tanggal nota |
+| Sheet rekap bulanan tanpa kolom FREKUENSI | Setiap baris = satu pembelian; tanggal dari kolom TGL. NOTA dan No. GR dari kolom NO. GR |
 
 Syaratnya, setiap sheet memiliki baris judul yang memuat **NAMA BARANG** dan
-**HARGA SATUAN** (atau **SATUAN**). Kolom **NO. PART** dan **FREKUENSI** dibaca
-bila ada. Baris judul boleh berada di mana saja pada 40 baris pertama.
+**HARGA SATUAN** (atau **SATUAN**). Kolom **NO. PART**, **FREKUENSI**,
+**TGL. NOTA** / **TANGGAL NOTA**, **NO. GR**, dan **QTY** dibaca bila ada. Baris
+judul boleh berada di mana saja pada 40 baris pertama.
+
+Pada sheet rekap bulanan, tanggal dan No. GR biasanya hanya ditulis di baris
+pertama setiap nota. Dashboard membawa nilai itu ke baris-baris berikutnya pada
+nota yang sama. Tanggal ditulis `31/08/2026` maupun sebagai tanggal Excel sama
+baiknya; salah ketik tahun yang jelas seperti `02026` atau `206` dibaca 2026.
 
 > Impor dari sheet rekap bulanan **tidak membaca warna sel**. Untuk departemen
 > sparepart yang hanya menghitung nota Mallomo (bertanda biru), impor sheet
@@ -361,12 +411,20 @@ bila ada. Baris judul boleh berada di mana saja pada 40 baris pertama.
 Impor berjalan dalam satu transaksi: bila terjadi kesalahan di tengah jalan,
 tidak ada data yang berubah sama sekali.
 
-### 10.5 Mengekspor ke Excel
+### 10.6 Mengekspor ke Excel
 
 Klik **Ekspor ke Excel** di kanan atas. Berkas yang terunduh berisi seluruh
-data departemen yang sedang dibuka, dengan kolom yang sama seperti sheet
-analisis. Berkas ini dapat diedit di Excel lalu diimpor kembali memakai mode
-**Ganti seluruh data**.
+data departemen yang sedang dibuka, dengan kolom NO, NO. PART, NAMA BARANG,
+HARGA SATUAN, FREKUENSI, FREKUENSI TOTAL, ditambah **TANGGAL NOTA**, **NO. GR**,
+dan **QTY PER NOTA**.
+
+Ketiga kolom terakhir berisi daftar yang dipisah koma, terbaru di depan, dan
+saling berpasangan: tanggal pertama milik No. GR pertama dan qty pertama.
+Tanda `-` berarti nilainya tidak tercatat. Bila mengedit di Excel, jaga agar
+jumlah butir di ketiga kolom tetap sama.
+
+Berkas ini dapat diimpor kembali memakai mode **Ganti seluruh data** tanpa ada
+yang hilang.
 
 ---
 
@@ -390,12 +448,16 @@ Secret key salah salin atau berasal dari proyek lain. Salin ulang dari
 **"Server tidak memiliki izin ke tabel rekap_barang"** atau **"permission denied"**
 Ada dua kemungkinan. Pertama, `SUPABASE_SERVICE_ROLE_KEY` berisi kunci anon atau
 publishable; ganti dengan secret key (bagian 7). Kedua, berkas
-`01_schema.sql` versi 2 belum dijalankan; jalankan seluruh isinya dan pastikan
-ketiga kolom pemeriksaan bernilai `true`.
+`01_schema.sql` versi 3 belum dijalankan; jalankan seluruh isinya dan pastikan
+keempat kolom pemeriksaan bernilai `true`.
 
 **"Fungsi basis data belum tersedia"**
-Berkas `01_schema.sql` yang dijalankan masih versi 1. Jalankan isi berkas versi
-terbaru dari folder `supabase/`.
+Berkas `01_schema.sql` yang dijalankan masih versi lama. Jalankan isi berkas
+versi 3 dari folder `supabase/`.
+
+**"Tabel nota_pembelian belum ada"**
+Kode dashboard sudah versi 3, tetapi basis data belum. Jalankan seluruh isi
+`supabase/01_schema.sql` versi 3, lalu muat ulang halaman.
 
 **"Halaman admin belum diaktifkan"** pada halaman masuk
 `ADMIN_PASSWORD` atau `SUPABASE_SERVICE_ROLE_KEY` belum diisi.
@@ -446,42 +508,47 @@ saja untuk memulihkan data.
 
 ---
 
-## 13. Memperbarui dari versi 1
+## 13. Memperbarui dari versi sebelumnya
 
-Bagian ini untuk Anda yang sudah memasang versi 1 dan mengalami pesan
-*permission denied*. Versi 2 mengatasi masalah tersebut dengan tidak lagi
-memakai kunci anon, sekaligus menambahkan halaman Admin.
+### Dari versi 2 ke versi 3 (tanggal nota)
 
-1. **Ganti berkas proyek.** Ekstrak ZIP versi 2, lalu salin seluruh isinya ke
-   folder proyek lama dan timpa berkas yang sama. Folder `.git` dan berkas
-   `.env.local` milik Anda tetap dipertahankan.
-
-2. **Jalankan skema versi 2.** Di Supabase SQL Editor, jalankan seluruh isi
+1. **Ganti berkas proyek** dengan isi ZIP versi 3. Perintah PowerShell lengkap
+   ada di README.md bagian *Memperbarui proyek yang sudah ada*. Folder `.git`
+   dan berkas `.env.local` milik Anda tetap dipertahankan.
+2. **Jalankan skema versi 3.** Di Supabase SQL Editor, jalankan seluruh isi
    `supabase/01_schema.sql` yang baru. Data yang sudah ada tidak terhapus.
-   Pastikan ketiga kolom pemeriksaan bernilai `true`.
-
-3. **Perbarui `.env.local`.** Ganti isinya menjadi tiga baris pada bagian 8.
-   Nama variabel berubah: `NEXT_PUBLIC_SUPABASE_URL` menjadi `SUPABASE_URL`,
-   dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` dihapus, diganti
-   `SUPABASE_SERVICE_ROLE_KEY` berisi secret key.
-
-4. **Pasang ulang pustaka dan coba.**
+   Pastikan keempat kolom pemeriksaan bernilai `true`.
+3. **Muat tanggal nota.** Data lama belum memiliki tanggal. Di halaman Admin,
+   impor `data-awal/data-awal-sparepart.xlsx` dan
+   `data-awal/data-awal-service.xlsx` dengan mode **Ganti seluruh data**.
+   Lakukan ini **sebelum** mengubah data lewat Admin, karena mode Ganti
+   menimpa perubahan sebelumnya.
+4. **Jalankan dan kirim ke GitHub.**
 
    ```bash
    npm install
    npm run dev
-   ```
-
-   Buka <http://localhost:3000> dan <http://localhost:3000/admin>.
-
-5. **Perbarui Vercel.** Pada **Settings**, **Environment Variables**, hapus dua
-   variabel lama yang berawalan `NEXT_PUBLIC_`, lalu tambahkan tiga variabel dari
-   bagian 9.
-
-6. **Kirim ke GitHub.** Vercel membangun ulang otomatis.
-
-   ```bash
    git add .
-   git commit -m "Versi 2: halaman admin, impor dan ekspor Excel"
+   git commit -m "Versi 3: tanggal nota, detail per barang, warna kelompok"
    git push
    ```
+
+   Environment variable di Vercel tidak berubah dari versi 2.
+
+### Dari versi 1 langsung ke versi 3
+
+Versi 1 memakai kunci anon yang menjadi penyebab pesan *permission denied*.
+Versi 3 tidak memakai kunci anon sama sekali.
+
+1. **Ganti berkas proyek** dengan isi ZIP versi 3 (lihat README.md).
+2. **Jalankan skema versi 3** seperti langkah 2 di atas. View lama dari versi 1
+   dihapus otomatis dan data yang ada tetap tersimpan.
+3. **Perbarui `.env.local`.** Ganti isinya menjadi tiga baris pada bagian 8.
+   Nama variabel berubah: `NEXT_PUBLIC_SUPABASE_URL` menjadi `SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` dihapus, diganti
+   `SUPABASE_SERVICE_ROLE_KEY` berisi secret key, dan `ADMIN_PASSWORD`
+   ditambahkan.
+4. **Muat tanggal nota** seperti langkah 3 di atas.
+5. **Perbarui Vercel.** Pada **Settings**, **Environment Variables**, hapus dua
+   variabel lama yang berawalan `NEXT_PUBLIC_`, tambahkan tiga variabel dari
+   bagian 9, lalu kirim ke GitHub seperti langkah 4 di atas.

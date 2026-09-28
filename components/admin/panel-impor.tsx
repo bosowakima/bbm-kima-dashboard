@@ -3,13 +3,22 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { Departemen } from "@/lib/barang";
+import { tampilTanggal } from "@/lib/kelompok";
 
 type Pratinjau = {
-  sheet: Array<{ nama: string; adaKolomFrekuensi: boolean; jumlahBaris: number }>;
+  sheet: Array<{ nama: string; adaKolomFrekuensi: boolean; adaTanggal: boolean; jumlahBaris: number }>;
   terpilih: string[];
   jumlahBaris: number;
   jumlahPembelian: number;
-  contoh: Array<{ no_part: string; nama_barang: string; harga_satuan: number; frekuensi: number }>;
+  jumlahNota: number;
+  jumlahNotaTanpaTanggal: number;
+  contoh: Array<{
+    no_part: string;
+    nama_barang: string;
+    harga_satuan: number;
+    frekuensi: number;
+    nota: Array<{ tanggal_nota: string | null }>;
+  }>;
   peringatan: string[];
 };
 
@@ -78,7 +87,7 @@ export default function PanelImpor({ departemen, namaDepartemen }: { departemen:
       if (data) {
         setSelesai(
           mode === "ganti"
-            ? `Impor selesai. Data ${namaDepartemen} kini berisi ${angka.format(data.jumlahBaris)} baris dari berkas ${berkas?.name}.`
+            ? `Impor selesai. Data ${namaDepartemen} kini berisi ${angka.format(data.jumlahBaris)} baris dan ${angka.format(data.jumlahNota)} tanggal nota dari berkas ${berkas?.name}.`
             : `Impor selesai. ${angka.format(data.barisBaru)} barang baru ditambahkan, sisanya menambah frekuensi barang yang sudah ada.`
         );
         setPratinjau(null);
@@ -143,9 +152,10 @@ export default function PanelImpor({ departemen, namaDepartemen }: { departemen:
       </div>
 
       <p className="max-w-3xl text-[13px] text-muted">
-        Berkas hasil ekspor dashboard dan sheet analisis dengan kolom FREKUENSI dibaca apa adanya. Sheet rekap
-        bulanan tanpa kolom FREKUENSI juga dapat diimpor: setiap baris dihitung satu kali pembelian, dan warna sel
-        tidak ikut dibaca. Frekuensi total selalu dihitung ulang otomatis.
+        Berkas hasil ekspor dashboard (termasuk berkas data awal) dibaca lengkap dengan tanggal notanya. Sheet
+        rekap bulanan juga dapat diimpor: setiap baris dihitung satu kali pembelian dan tanggal diambil dari kolom
+        TGL. NOTA, tetapi warna sel tidak ikut dibaca. Sheet analisis tanpa kolom tanggal diimpor tanpa tanggal
+        nota. Frekuensi total selalu dihitung ulang otomatis.
       </p>
 
       {galat ? <p role="alert" className="text-sm text-part">{galat}</p> : null}
@@ -168,6 +178,7 @@ export default function PanelImpor({ departemen, namaDepartemen }: { departemen:
                     <span className="text-ink">{s.nama}</span>
                     <span className="tabular text-muted">
                       {angka.format(s.jumlahBaris)} baris{s.adaKolomFrekuensi ? ", berkolom frekuensi" : ""}
+                      {s.adaTanggal ? ", bertanggal nota" : ""}
                     </span>
                   </label>
                 </li>
@@ -177,17 +188,26 @@ export default function PanelImpor({ departemen, namaDepartemen }: { departemen:
 
           <p className="tabular text-sm text-ink">
             Siap diimpor: {angka.format(pratinjau.jumlahBaris)} barang pada harga masing-masing, dengan total{" "}
-            {angka.format(pratinjau.jumlahPembelian)} kali pembelian.
+            {angka.format(pratinjau.jumlahPembelian)} kali pembelian
+            {pratinjau.jumlahNota > 0
+              ? ` dan ${angka.format(pratinjau.jumlahNota)} tanggal nota${
+                  pratinjau.jumlahNotaTanpaTanggal > 0
+                    ? ` (${angka.format(pratinjau.jumlahNotaTanpaTanggal)} di antaranya tanpa tanggal yang terbaca)`
+                    : ""
+                }`
+              : ". Berkas ini tidak memuat tanggal nota"}
+            .
           </p>
 
           <div className="overflow-x-auto rounded-md border border-line">
-            <table className="w-full min-w-[560px] bg-panel text-[13px]">
+            <table className="w-full min-w-[640px] bg-panel text-[13px]">
               <thead>
                 <tr className="border-b border-line text-left text-muted">
                   <th className="px-3 py-2 font-medium">No. part</th>
                   <th className="px-3 py-2 font-medium">Nama barang</th>
                   <th className="px-3 py-2 text-right font-medium">Harga satuan</th>
                   <th className="px-3 py-2 text-right font-medium">Frekuensi</th>
+                  <th className="px-3 py-2 font-medium">Nota terakhir</th>
                 </tr>
               </thead>
               <tbody>
@@ -197,6 +217,10 @@ export default function PanelImpor({ departemen, namaDepartemen }: { departemen:
                     <td className="px-3 py-2 text-ink">{b.nama_barang}</td>
                     <td className="tabular px-3 py-2 text-right">{rupiah.format(b.harga_satuan)}</td>
                     <td className="tabular px-3 py-2 text-right">{angka.format(b.frekuensi)}</td>
+                    <td className="tabular px-3 py-2 text-slate">
+                      {b.nota[0]?.tanggal_nota ? tampilTanggal(b.nota[0].tanggal_nota) : "—"}
+                      {b.nota.length > 1 ? ` · ${b.nota.length} nota` : ""}
+                    </td>
                   </tr>
                 ))}
               </tbody>

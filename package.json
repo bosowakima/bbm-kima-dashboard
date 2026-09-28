@@ -1,6 +1,6 @@
 {
   "name": "bbm-kima-dashboard",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "private": true,
   "description": "Dashboard rekap pembelian sparepart dan service Bosowa Berlian Motor KIMA",
   "scripts": {

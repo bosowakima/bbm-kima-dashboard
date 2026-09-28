@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 
 type Props = {
   nilai: string | number;
-  tampil: string;
+  tampil: React.ReactNode;
+  /** Teks untuk pembaca layar bila `tampil` bukan teks biasa. */
+  teksLabel?: string;
   jenis: "teks" | "angka";
   label: string;
   rata?: "kiri" | "kanan";
@@ -17,7 +19,7 @@ type Props = {
  * Sel tabel yang dapat diubah langsung. Klik untuk mengubah,
  * Enter atau klik di luar sel untuk menyimpan, Esc untuk membatalkan.
  */
-export default function SelEditable({ nilai, tampil, jenis, label, rata = "kiri", mono, simpan }: Props) {
+export default function SelEditable({ nilai, tampil, teksLabel, jenis, label, rata = "kiri", mono, simpan }: Props) {
   const [ubah, setUbah] = useState(false);
   const [draf, setDraf] = useState(String(nilai));
   const [status, setStatus] = useState<"diam" | "menyimpan" | "galat">("diam");
@@ -56,10 +58,10 @@ export default function SelEditable({ nilai, tampil, jenis, label, rata = "kiri"
       <button
         type="button"
         onClick={() => setUbah(true)}
-        aria-label={`Ubah ${label}: ${tampil}`}
+        aria-label={`Ubah ${label}: ${teksLabel ?? (typeof tampil === "string" ? tampil : String(nilai))}`}
         className={`-mx-2 block w-[calc(100%+1rem)] rounded px-2 py-1 ${rataKelas} ${
           mono ? "font-mono text-[13px]" : ""
-        } hover:bg-surface hover:outline hover:outline-1 hover:outline-line`}
+        } hover:bg-white/70 hover:outline hover:outline-1 hover:outline-line`}
       >
         {tampil}
       </button>

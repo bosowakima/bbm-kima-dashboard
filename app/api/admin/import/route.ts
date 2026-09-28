@@ -51,7 +51,12 @@ export async function POST(req: NextRequest) {
       terpilih,
       jumlahBaris: baris.length,
       jumlahPembelian: baris.reduce((t, b) => t + b.frekuensi, 0),
-      contoh: baris.slice(0, 8),
+      jumlahNota: baris.reduce((t, b) => t + b.nota.length, 0),
+      jumlahNotaTanpaTanggal: baris.reduce((t, b) => t + b.nota.filter((n) => !n.tanggal_nota).length, 0),
+      contoh: baris.slice(0, 8).map((b) => ({
+        ...b,
+        nota: [...b.nota].sort((x, y) => (y.tanggal_nota ?? "").localeCompare(x.tanggal_nota ?? "")),
+      })),
       peringatan: peringatanTerpilih(hasil, terpilih),
     });
   }
@@ -72,5 +77,10 @@ export async function POST(req: NextRequest) {
     return jsonGalat(pesanGalatDb(e as { code?: string; message: string }), 500);
   }
 
-  return jsonOk({ jumlahBaris: baris.length, barisBaru: data as number, mode });
+  return jsonOk({
+    jumlahBaris: baris.length,
+    barisBaru: data as number,
+    jumlahNota: baris.reduce((t, b) => t + b.nota.length, 0),
+    mode,
+  });
 }

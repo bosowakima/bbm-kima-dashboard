@@ -37,8 +37,8 @@ export default async function HalamanDepartemen({
   if (!supabaseSiap) return <PemberitahuanSetup />;
 
   const cari = searchParams.cari ?? "";
-  const urut = searchParams.urut ?? "frekuensi_total";
-  const arah = searchParams.arah === "asc" ? "asc" : "desc";
+  const urut = searchParams.urut ?? "no_urut";
+  const arah = searchParams.arah === "asc" || (urut === "no_urut" && searchParams.arah !== "desc") ? "asc" : "desc";
   const halaman = Number(searchParams.halaman) > 0 ? Number(searchParams.halaman) : 1;
 
   const [ringkasan, teratas, tabel] = await Promise.all([
@@ -76,21 +76,23 @@ export default async function HalamanDepartemen({
         <TanggaFrekuensi data={teratas} warna={WARNA[departemen]} />
       </Panel>
 
+      <div id="daftar" className="scroll-mt-4">
       <Panel
         judul="Daftar lengkap"
-        keterangan="Klik judul kolom untuk mengurutkan. Pencarian mencakup nama barang dan nomor part."
+        keterangan="Urutan bawaan: frekuensi total terbesar di atas. Klik judul kolom untuk mengurutkan dengan cara lain. Pencarian mencakup nama barang dan nomor part."
       >
         <TabelBarang
           jalur={info.jalur}
           baris={tabel.baris}
           jumlah={tabel.jumlah}
-          halaman={halaman}
+          halaman={tabel.halaman}
           perHalaman={PER_HALAMAN}
           cari={cari}
           urut={urut}
           arah={arah}
         />
       </Panel>
+      </div>
     </div>
   );
 }

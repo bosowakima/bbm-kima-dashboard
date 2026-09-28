@@ -29,6 +29,86 @@ export function kunciBarang(noPart: string, nama: string): string {
   return part === "-" ? `N|${rapikanTeks(nama)}` : `P|${part}`;
 }
 
+export type Nota = {
+  id: number;
+  /** Format ISO "2026-08-31", atau null bila tanggal tidak tercatat di nota. */
+  tanggal_nota: string | null;
+  no_gr: string | null;
+  qty: number | null;
+};
+
+export type BarisRekap = {
+  id: number;
+  departemen: Departemen;
+  no_urut: number;
+  no_part: string;
+  nama_barang: string;
+  harga_satuan: number;
+  frekuensi: number;
+  frekuensi_total: number;
+  nota: Nota[];
+};
+
+export type InputNota = {
+  tanggal_nota: string | null;
+  no_gr: string | null;
+  qty: number | null;
+};
+
+/**
+ * Membaca tanggal dari berbagai bentuk penulisan dan mengembalikan format ISO.
+ * Menerima Date, "2026-08-31", "31/08/2026", "31-8-26", dan "'31/08/2026" (tanda kutip awal dari Excel).
+ * Tahun yang jelas salah ketik seperti "02026" atau "206" dibaca sebagai 2026.
+ */
+export function bacaTanggal(nilai: unknown): string | null {
+  if (nilai === null || nilai === undefined || nilai === "") return null;
+  if (nilai instanceof Date) {
+    if (Number.isNaN(nilai.getTime())) return null;
+    const y = nilai.getUTCFullYear();
+    // Tahun "206" adalah salah ketik 2026 yang tersimpan sebagai tanggal Excel.
+    if (y >= 200 && y <= 209) {
+      return bacaTanggal(`${y - 200 + 2020}-${nilai.getUTCMonth() + 1}-${nilai.getUTCDate()}`);
+    }
+    return nilai.toISOString().slice(0, 10);
+  }
+  const teks = String(nilai).trim().replace(/^'+/, "");
+  let m = teks.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  let y: number, bln: number, h: number;
+  if (m) {
+    [y, bln, h] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  } else {
+    m = teks.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,5})$/);
+    if (!m) return null;
+    [h, bln, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    if (m[3].length === 5 && m[3].startsWith("0")) y = Number(m[3].slice(1)); // "02026" -> 2026
+    if (y < 100) y += 2000;
+    if (y >= 200 && y <= 209) y = y - 200 + 2020; // "206" -> 2026
+  }
+  const d = new Date(Date.UTC(y, bln - 1, h));
+  if (d.getUTCFullYear() !== y || d.getUTCMonth() !== bln - 1 || d.getUTCDate() !== h) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+export type HasilValidasiNota =
+  | { sah: true; data: InputNota }
+  | { sah: false; pesan: string };
+
+export function validasiNota(masukan: Partial<Record<keyof InputNota, unknown>>): HasilValidasiNota {
+  const mentah = masukan.tanggal_nota;
+  const tanggal = bacaTanggal(mentah);
+  if (mentah !== null && mentah !== undefined && String(mentah).trim() !== "" && !tanggal) {
+    return { sah: false, pesan: "Tanggal nota tidak dikenali. Gunakan format 31/08/2026." };
+  }
+  const noGr = String(masukan.no_gr ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+  if (noGr.length > 60) return { sah: false, pesan: "Nomor GR paling panjang 60 karakter." };
+  const qtyTeks = String(masukan.qty ?? "").trim().replace(",", ".");
+  const qty = qtyTeks === "" ? null : Number(qtyTeks);
+  if (qty !== null && (!Number.isFinite(qty) || qty < 0)) {
+    return { sah: false, pesan: "Qty harus berupa angka, 0 atau lebih." };
+  }
+  return { sah: true, data: { tanggal_nota: tanggal, no_gr: noGr || null, qty } };
+}
+
 export type InputBarang = {
   no_part: string;
   nama_barang: string;
@@ -78,6 +158,9 @@ export function pesanGalatDb(error: { code?: string; message: string }): string 
   }
   if (error.code === "PGRST202" || error.code === "42883") {
     return "Fungsi basis data belum tersedia. Jalankan seluruh isi berkas supabase/01_schema.sql versi terbaru.";
+  }
+  if (error.code === "PGRST200" || error.code === "42P01" || /nota_pembelian/.test(error.message)) {
+    return "Tabel nota_pembelian belum ada. Jalankan seluruh isi berkas supabase/01_schema.sql versi 3, lalu muat ulang halaman.";
   }
   return error.message;
 }

@@ -1,8 +1,11 @@
 import "server-only";
 import ExcelJS from "exceljs";
-import { kunciBarang, validasiBarang, type InputBarang, type Departemen } from "./barang";
+import { bacaTanggal, kunciBarang, validasiBarang, validasiNota, type InputBarang, type InputNota, type Departemen } from "./barang";
 import { DEPARTEMEN } from "./departemen";
-import type { BarisRekap } from "./data";
+import type { BarisRekap } from "./barang";
+
+/** Satu baris impor: barang pada satu harga beserta tanggal-tanggal notanya. */
+export type BarisImpor = InputBarang & { nota: InputNota[] };
 
 /* ------------------------------------------------------------------ */
 /* Membaca berkas                                                      */
@@ -14,6 +17,9 @@ const JUDUL = {
   nama_barang: ["NAMA BARANG", "NAMA", "BARANG", "DESKRIPSI"],
   harga_satuan: ["HARGA SATUAN", "SATUAN", "HARGA"],
   frekuensi: ["FREKUENSI", "FREK", "JUMLAH PEMBELIAN"],
+  tanggal_nota: ["TGL NOTA", "TANGGAL NOTA", "TGL", "TANGGAL"],
+  no_gr: ["NO GR", "NOMOR GR", "GR"],
+  qty: ["QTY", "QTY PER NOTA"],
 } as const;
 
 type KolomDikenal = keyof typeof JUDUL;
@@ -66,13 +72,26 @@ function cariBarisJudul(ws: ExcelJS.Worksheet): { baris: number; kolom: PetaKolo
 export type SheetTerbaca = {
   nama: string;
   adaKolomFrekuensi: boolean;
+  adaTanggal: boolean;
   jumlahBaris: number;
 };
+
+/** Memecah isi sel daftar seperti "31/08/2026, 21/07/2026" menjadi butir-butirnya. */
+function pecahDaftar(nilai: unknown): string[] {
+  if (nilai === null || nilai === undefined) return [];
+  if (nilai instanceof Date) return [nilai.toISOString().slice(0, 10)];
+  return String(nilai)
+    .split(/[,;\n]+/)
+    .map((t) => t.trim())
+    .filter((t) => t !== "");
+}
+
+const kosongKeNull = (t: string | undefined) => (t === undefined || t === "-" || t === "—" ? null : t);
 
 export type HasilBaca = {
   sheet: SheetTerbaca[];
   /** Baris per sheet, belum digabung. */
-  baris: Record<string, InputBarang[]>;
+  baris: Record<string, BarisImpor[]>;
   /** Baris yang dilewati, per sheet. */
   peringatan: Record<string, string[]>;
 };
@@ -92,9 +111,15 @@ export async function bacaBerkasExcel(buffer: ArrayBuffer): Promise<HasilBaca> {
     if (!judul) return;
 
     const { kolom } = judul;
-    const barisSheet: InputBarang[] = [];
+    const barisSheet: BarisImpor[] = [];
     const lewati: string[] = [];
     let kosongBeruntun = 0;
+    let adaTanggal = false;
+
+    // Sheet rekap bulanan (tanpa kolom FREKUENSI): tanggal dan No. GR hanya tertulis di baris
+    // pertama setiap nota, jadi nilainya dibawa ke baris-baris berikutnya pada nota yang sama.
+    const modeDaftar = Boolean(kolom.frekuensi);
+    const notaKini: { tanggal: string | null; noGr: string | null } = { tanggal: null, noGr: null };
 
     for (let r = judul.baris + 1; r <= ws.rowCount; r++) {
       const row = ws.getRow(r);
@@ -103,6 +128,18 @@ export async function bacaBerkasExcel(buffer: ArrayBuffer): Promise<HasilBaca> {
       const nama = ambil("nama_barang");
       const part = ambil("no_part");
       const harga = ambil("harga_satuan");
+
+      if (!modeDaftar) {
+        const grSel = ambil("no_gr");
+        const tglSel = ambil("tanggal_nota");
+        const gr = grSel === null || String(grSel).trim() === "" ? null : String(grSel).trim();
+        if (gr && gr !== notaKini.noGr) {
+          notaKini.noGr = gr;
+          notaKini.tanggal = bacaTanggal(tglSel);
+        } else if (tglSel !== null && String(tglSel).trim() !== "") {
+          notaKini.tanggal = bacaTanggal(tglSel);
+        }
+      }
 
       const namaKosong = nama === null || String(nama).trim() === "";
       const partKosong = part === null || String(part).trim() === "" || String(part).trim() === "-";
@@ -129,13 +166,34 @@ export async function bacaBerkasExcel(buffer: ArrayBuffer): Promise<HasilBaca> {
         lewati.push(`Sheet "${ws.name}" baris ${r} dilewati: ${cek.pesan}`);
         continue;
       }
-      barisSheet.push(cek.data);
+
+      const nota: InputNota[] = [];
+      if (modeDaftar) {
+        const tgl = pecahDaftar(ambil("tanggal_nota"));
+        const gr = pecahDaftar(ambil("no_gr"));
+        const qty = pecahDaftar(ambil("qty"));
+        const n = Math.max(tgl.length, gr.length, qty.length);
+        for (let j = 0; j < n; j++) {
+          const v = validasiNota({ tanggal_nota: kosongKeNull(tgl[j]), no_gr: kosongKeNull(gr[j]), qty: kosongKeNull(qty[j]) });
+          nota.push(v.sah ? v.data : { tanggal_nota: null, no_gr: kosongKeNull(gr[j]), qty: null });
+        }
+      } else if (kolom.tanggal_nota || kolom.no_gr) {
+        const q = ambil("qty");
+        nota.push({
+          tanggal_nota: notaKini.tanggal,
+          no_gr: notaKini.noGr ? notaKini.noGr.toUpperCase() : null,
+          qty: typeof q === "number" && Number.isFinite(q) ? q : null,
+        });
+      }
+      if (nota.some((n) => n.tanggal_nota)) adaTanggal = true;
+      barisSheet.push({ ...cek.data, nota });
     }
 
     if (barisSheet.length > 0) {
       hasil.sheet.push({
         nama: ws.name,
         adaKolomFrekuensi: Boolean(kolom.frekuensi),
+        adaTanggal,
         jumlahBaris: barisSheet.length,
       });
       hasil.baris[ws.name] = barisSheet;
@@ -156,14 +214,18 @@ export async function bacaBerkasExcel(buffer: ArrayBuffer): Promise<HasilBaca> {
  * Barang yang sama pada harga yang sama dijumlahkan frekuensinya.
  * Pada sheet tanpa kolom FREKUENSI, setiap baris dihitung sebagai satu kali pembelian.
  */
-export function gabungkanBaris(hasil: HasilBaca, sheetTerpilih: string[]): InputBarang[] {
-  const peta = new Map<string, InputBarang>();
+export function gabungkanBaris(hasil: HasilBaca, sheetTerpilih: string[]): BarisImpor[] {
+  const peta = new Map<string, BarisImpor>();
   for (const nama of sheetTerpilih) {
     for (const b of hasil.baris[nama] ?? []) {
       const kunci = `${kunciBarang(b.no_part, b.nama_barang)}#${b.harga_satuan}`;
       const ada = peta.get(kunci);
-      if (ada) ada.frekuensi += b.frekuensi;
-      else peta.set(kunci, { ...b });
+      if (ada) {
+        ada.frekuensi += b.frekuensi;
+        ada.nota.push(...b.nota);
+      } else {
+        peta.set(kunci, { ...b, nota: [...b.nota] });
+      }
     }
   }
   return Array.from(peta.values());
@@ -202,20 +264,26 @@ export async function buatBerkasExcel(
   ws.columns = [
     { key: "no", width: 6 },
     { key: "no_part", width: 18 },
-    { key: "nama_barang", width: 42 },
+    { key: "nama_barang", width: 40 },
     { key: "harga_satuan", width: 16 },
     { key: "frekuensi", width: 12 },
     { key: "frekuensi_total", width: 16 },
+    { key: "tanggal_nota", width: 34 },
+    { key: "no_gr", width: 34 },
+    { key: "qty", width: 16 },
   ];
 
   const tanggal = new Intl.DateTimeFormat("id-ID", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Makassar" }).format(new Date());
 
   ws.getCell("A1").value = `REKAP PEMBELIAN ${DEPARTEMEN[departemen].nama.toUpperCase()} — BOSOWA BERLIAN MOTOR KIMA`;
   ws.getCell("A1").font = { name: "Arial", size: 13, bold: true, color: { argb: BIRU } };
-  ws.getCell("A2").value = `Diekspor dari dashboard pada ${tanggal} WITA. Berkas ini dapat diimpor kembali tanpa perubahan format.`;
+  ws.getCell("A2").value = `Diekspor dari dashboard pada ${tanggal} WITA. Berkas ini dapat diimpor kembali tanpa perubahan format. Kolom TANGGAL NOTA, NO. GR, dan QTY PER NOTA berisi daftar yang saling berpasangan, dipisah koma, terbaru di depan.`;
   ws.getCell("A2").font = { name: "Arial", size: 9, italic: true, color: { argb: "FF595959" } };
 
-  const judul = ["NO", "NO. PART", "NAMA BARANG", "HARGA SATUAN", "FREKUENSI", "FREKUENSI TOTAL"];
+  const judul = [
+    "NO", "NO. PART", "NAMA BARANG", "HARGA SATUAN", "FREKUENSI", "FREKUENSI TOTAL",
+    "TANGGAL NOTA", "NO. GR", "QTY PER NOTA",
+  ];
   const barisJudul = ws.getRow(4);
   barisJudul.values = judul;
   barisJudul.eachCell((sel) => {
@@ -226,17 +294,22 @@ export async function buatBerkasExcel(
 
   const garis = { style: "thin" as const, color: { argb: "FFB0B0B0" } };
   baris.forEach((b, i) => {
-    const row = ws.addRow([i + 1, b.no_part, b.nama_barang, b.harga_satuan, b.frekuensi, b.frekuensi_total]);
+    // Ketiga kolom nota berurutan sama (terbaru dulu), sehingga butir ke-n saling berpasangan.
+    const tgl = b.nota.map((n) => (n.tanggal_nota ? n.tanggal_nota.split("-").reverse().join("/") : "-")).join(", ");
+    const gr = b.nota.map((n) => n.no_gr ?? "-").join(", ");
+    const qty = b.nota.map((n) => (n.qty === null ? "-" : String(n.qty))).join(", ");
+    const row = ws.addRow([i + 1, b.no_part, b.nama_barang, b.harga_satuan, b.frekuensi, b.frekuensi_total, tgl, gr, qty]);
     row.eachCell((sel, c) => {
+      if (c >= 7) sel.alignment = { wrapText: true, vertical: "top" };
       sel.font = { name: "Arial", size: 10 };
       sel.border = { top: garis, left: garis, bottom: garis, right: garis };
       if (c === 4) sel.numFmt = "#,##0";
-      if (c === 1 || c >= 5) sel.alignment = { horizontal: "center" };
+      if (c === 1 || c === 5 || c === 6) sel.alignment = { horizontal: "center", vertical: "top" };
       if (i % 2 === 1) sel.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BIRU_MUDA } };
     });
   });
 
-  ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + baris.length, column: 6 } };
+  ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + baris.length, column: 9 } };
 
   const akhir = 4 + baris.length;
   const ringkas = ws.getRow(akhir + 2);

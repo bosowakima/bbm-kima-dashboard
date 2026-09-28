@@ -7,6 +7,7 @@ import { formatAngka } from "@/lib/format";
 import { Panel } from "@/components/panel";
 import PemberitahuanSetup from "@/components/pemberitahuan-setup";
 import TabelAdmin from "@/components/admin/tabel-admin";
+import Paginasi from "@/components/paginasi";
 import PanelImpor from "@/components/admin/panel-impor";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,6 @@ export default async function Halaman({
     ambilRingkasan(),
   ]);
   const jumlahSemua = ringkasan.find((r) => r.departemen === departemen)?.jumlah_baris ?? 0;
-  const totalHalaman = Math.max(1, Math.ceil(tabel.jumlah / PER_HALAMAN));
   const jalur = `/admin/${departemen}`;
   const url = (h: number) => {
     const p = new URLSearchParams();
@@ -87,8 +87,9 @@ export default async function Halaman({
         <PanelImpor departemen={departemen} namaDepartemen={info.nama} />
       </Panel>
 
+      <div id="data-barang" className="scroll-mt-4">
       <Panel judul="Data barang" keterangan="Frekuensi total dan urutan dihitung ulang otomatis setiap kali data berubah.">
-        <form action={jalur} method="get" className="mb-4 flex flex-wrap items-center gap-2">
+        <form action={`${jalur}#data-barang`} method="get" className="mb-4 flex flex-wrap items-center gap-2">
           <label htmlFor="cari-admin" className="sr-only">Cari nama barang atau nomor part</label>
           <input
             id="cari-admin"
@@ -107,22 +108,21 @@ export default async function Halaman({
 
         <TabelAdmin departemen={departemen} baris={tabel.baris} />
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate">
-          <span className="tabular">
-            {formatAngka(tabel.jumlah)} baris{cari ? " cocok" : ""}, halaman {halaman} dari {totalHalaman}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <span className="tabular text-sm text-slate">
+            {formatAngka(tabel.jumlah)} baris{cari ? " cocok" : ""}, halaman {tabel.halaman} dari {tabel.totalHalaman}
           </span>
-          <div className="flex gap-2">
-            <Link href={url(Math.max(1, halaman - 1))} aria-disabled={halaman <= 1}
-              className={`rounded-md border border-line px-3 py-2 ${halaman <= 1 ? "pointer-events-none opacity-50" : "hover:bg-surface"}`}>
-              Sebelumnya
-            </Link>
-            <Link href={url(Math.min(totalHalaman, halaman + 1))} aria-disabled={halaman >= totalHalaman}
-              className={`rounded-md border border-line px-3 py-2 ${halaman >= totalHalaman ? "pointer-events-none opacity-50" : "hover:bg-surface"}`}>
-              Berikutnya
-            </Link>
-          </div>
+          <Paginasi
+            halaman={tabel.halaman}
+            totalHalaman={tabel.totalHalaman}
+            hrefHalaman={url}
+            jalur={jalur}
+            paramLain={{ cari: cari || undefined }}
+            jangkar="data-barang"
+          />
         </div>
       </Panel>
+      </div>
     </div>
   );
 }

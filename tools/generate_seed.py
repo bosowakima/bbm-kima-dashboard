@@ -5,7 +5,7 @@ Cara pakai:
     python tools/generate_seed.py rekap_sparepart.xlsx "ANALISIS MALLOMO" sparepart
     python tools/generate_seed.py rekap_service.xlsx "ANALISIS JAN-AGU 2026" service
 
-Hasilnya ditulis ke folder supabase/. Cara yang lebih mudah untuk memperbarui data
+Hasilnya ditulis ke folder supabase/ TANPA tanggal nota. Cara yang lebih mudah dan lengkap untuk memperbarui data
 adalah fitur Impor pada halaman Admin dashboard; skrip ini disediakan sebagai cadangan.
 
 Prasyarat: pip install openpyxl
